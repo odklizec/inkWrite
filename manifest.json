@@ -1,0 +1,18 @@
+{
+  "app_id": "inkwrite",
+  "display_name": "inkWrite",
+  "version": "0.1.37",
+  "api": "2.11",
+  "entry": "index.lua",
+  "description": "A quiet Bluetooth-keyboard writer with ordinary Markdown files on SD",
+  "display": {
+    "orientation": "system"
+  },
+  "ttf_reserve_kb": 1024,
+  "app_icon_s": "app_icon_s",
+  "preload_assets": [
+    "app_icon_s",
+    "app_icon_l"
+  ],
+  "app_icon_l": "app_icon_l"
+}
