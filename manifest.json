@@ -1,7 +1,7 @@
 {
   "app_id": "inkwrite",
   "display_name": "inkWrite",
-  "version": "0.1.40",
+  "version": "0.1.41",
   "api": "2.17",
   "entry": "index.lua",
   "description": "A quiet Bluetooth-keyboard writer with ordinary Markdown files on SD",

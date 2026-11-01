@@ -3,7 +3,7 @@ local Docs=require("domain.documents")
 local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
-local M={VERSION="0.1.40"}
+local M={VERSION="0.1.41"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 local prepare_frame
@@ -13,6 +13,9 @@ end
 local function message(ctx,s) A.message=s; ctx:invalidate() end
 local function now(ctx) return ctx.clock:millis() end
 local function age(t,earlier) return (t-earlier)&0x7fffffff end
+local function timing(metric,ms)
+  metric.last=ms;metric.max=math.max(metric.max,ms)
+end
 local function selection()
   local p=A.buffer.pos; local a=A.anchor or p
   return math.min(a,p),math.max(a,p)
@@ -110,12 +113,14 @@ local function refresh_layout(ctx)
 end
 local function cancel_redraw()
   if A.redraw_timer then A.redraw_timer:cancel(); A.redraw_timer=nil end
+  A.pending_frame_since=nil
 end
 local function request_editor_frame(ctx)
   -- One deadline for a burst, not a trailing debounce: continuous typing
   -- still gets periodic frames. Capture every edit before requesting paint.
   if A.redraw_timer then return end
-  local timer=ctx:after(80,function(c)
+  A.pending_frame_since=A.input_started or now(ctx)
+  local timer=ctx:after(30,function(c)
     A.redraw_timer=nil
     prepare_frame(c)
     c:invalidate()
@@ -184,10 +189,12 @@ local function save(ctx)
   end
   A.recovery_doc=nil;A.recovery_revision=nil
   A.status="Saving..."
+  local started=now(ctx)
   local ok,result,err=pcall(function()
     local text=A.buffer:text()
     return Docs.save(ctx,A.doc,text)
   end)
+  timing(A.timing.save,age(now(ctx),started))
   if not ok or not result then
     A.status="SAVE FAILED"; A.save_failed=true
     message(ctx,tostring(ok and err or result)); return false
@@ -334,7 +341,7 @@ local function today(ctx)
   elseif e=="not_found" then set_document(ctx,name,"",nil,true)
   else message(ctx,"Journal not opened: "..tostring(e)) end
 end
-local commands={"Back to writing","Save to SD card","New Markdown page","Open SD files","Typography","Where are my files?","Keyboard help","Memory sample","Save and exit","Orientation: follow device","Focus: Ctrl+Shift+F","Today's journal: Ctrl+J","New plain text page","Keyboard layout"}
+local commands={"Back to writing","Save to SD card","New Markdown page","Open SD files","Typography","Where are my files?","Keyboard help","Memory & timing","Save and exit","Orientation: follow device","Focus: Ctrl+Shift+F","Today's journal: Ctrl+J","New plain text page","Keyboard layout"}
 -- Native fonts live for the whole session. Keep successes AND failures so
 -- neither drawing nor repeated selection can retry allocations indefinitely.
 local function choose_font(ctx,name,px)
@@ -432,9 +439,12 @@ local function command(ctx,i)
   elseif i==6 then A.view="files_help";A.help_page=1
   elseif i==7 then A.view="help";A.help_page=1
   elseif i==8 then
-    if ctx.gc then
-      ctx.gc:collect(); A.memory_sample="Lua heap: "..tostring(ctx.gc:count()//1024).." KiB";ctx:invalidate()
-    end
+    local heap="Lua heap unavailable"
+    if ctx.gc then ctx.gc:collect();heap="Lua heap: "..tostring(ctx.gc:count()//1024).." KiB" end
+    local t=A.timing
+    A.memory_sample=heap.."\nMax ms: input "..t.input.max..", layout "..t.layout.max..", draw "..t.draw.max..
+      "\nQueue "..t.queue.max..", save "..t.save.max..", input-to-draw "..t.compose.max.."\nExcludes Bluetooth and panel refresh"
+    ctx:invalidate()
   elseif i==9 then close_request(ctx) end
   if i==10 then A.view="orientation_help";A.help_page=1 end
   if i==11 then
@@ -480,6 +490,8 @@ end
 function M.load(ctx)
   extend_budget(ctx)
   A={view="editor",top=0,focus=1,large=ctx.state.large==true,caps=false,dirty=false,status="Unsaved",rows={}}
+  A.timing={}
+  for _,key in ipairs({"input","layout","draw","queue","save","compose"}) do A.timing[key]={last=0,max=0} end
   A.stats=Stats.new(ctx)
   A.focus_mode=ctx.state.focus_mode==true
   A.keyboard=Keyboard.new(ctx.state.keyboard_layout)
@@ -1142,6 +1154,7 @@ end
 -- Layout is prepared in lifecycle/input/timer callbacks, never in draw.
 prepare_frame=function(ctx)
   if not A or not A.buffer then return end
+  local started=now(ctx)
   local l=geometry(ctx);local f=font(ctx);local ui=ctx.fonts.medium
   if A.view=="editor" then
     if A.layout_revision~=A.buffer.revision or A.layout_pos~=A.buffer.pos or A.layout_width~=l.w or A.layout_count~=l.count or A.layout_font~=f or A.layout_top~=A.top then refresh_layout(ctx) end
@@ -1183,6 +1196,9 @@ prepare_frame=function(ctx)
       local r=p.rows[ci]
       p.caret={row=ci,x=f:measure(r.text:sub(1,p.pos-r.a))}
     end
+    p.queued_since=A.pending_frame_since;A.pending_frame_since=nil
+    if p.queued_since then timing(A.timing.queue,age(started,p.queued_since)) end
+    timing(A.timing.layout,age(now(ctx),started))
   end
   A.prepared=p
 end
@@ -1399,7 +1415,10 @@ function M.draw(ctx,g)
         if i==A.focus and (A.file_action or 1)>1 then local x=A.file_action==2 and rename or delete;g:rect(x,y,44,44,{radius=3,line_width=2}) end
       else box(g,ui,l.x,y+8,l.w,30,label) end
     end
-    if A.view=="menu" and A.memory_sample then box(g,ctx.fonts.small or ui,l.x,l.body+#rows*l.row+16,l.w,48,A.memory_sample) end
+    if A.view=="menu" and A.memory_sample then
+      local y=l.body+#rows*l.row+16
+      box(g,ctx.fonts.small or ui,l.x,y,l.w,math.max(0,l.dock-y-8),A.memory_sample)
+    end
     pager(g,ui,l,((A.focus-1)//per)+1,math.max(1,(#rows+per-1)//per))
   elseif A.view=="delete_confirm" then
     box(g,ui,l.x,l.body,l.w,60,A.confirm_file and A.confirm_file.name or "")
@@ -1469,15 +1488,31 @@ function M.draw(ctx,g)
     end
   end
 end
--- Input bursts retain the existing 80 ms frame deadline; its timer prepares
+-- Input bursts share a 30 ms frame deadline; its timer prepares
 -- the latest revision. Other navigation/lifecycle changes prepare immediately.
 for _,name in ipairs({"load","input","tick","resume"}) do
   local callback=M[name]
   M[name]=function(ctx,...)
+    local started=name=="input" and A and A.view=="editor" and now(ctx) or nil
+    if started and A then A.input_started=started end
     local result=callback(ctx,...)
     if A and (not A.redraw_timer or not frame_ready(geometry(ctx),font(ctx))) then prepare_frame(ctx) end
+    if started and A then timing(A.timing.input,age(now(ctx),started));A.input_started=nil end
     return result
+  end
+end
+local draw=M.draw
+M.draw=function(ctx,g)
+  local started=now(ctx)
+  draw(ctx,g)
+  if A and A.view=="editor" then
+    local finished=now(ctx);timing(A.timing.draw,age(finished,started))
+    local p=A.prepared
+    if p and p.queued_since and not p.sampled and A.touch_rows==p.rows and A.touch_revision==p.revision then
+      timing(A.timing.compose,age(finished,p.queued_since));p.sampled=true
+    end
   end
 end
 -- Desktop harness uses the real controller through public lifecycle functions.
 return M
+

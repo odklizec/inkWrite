@@ -1,3 +1,11 @@
+## Maintenance 0.1.41 — 2026-11-01
+
+Reduced the typing/navigation burst deadline from 80 ms to 30 ms. It remains a fixed first-input deadline, not a trailing debounce; later keys share the timer rather than postponing it. The coherent prepared editor snapshot, stale touch guard, 5/30-second autosave and missing-last-file startup fix remain intact.
+
+Added bounded session-only timing counters for editor input callback, first queued input to preparation, editor layout/snapshot preparation, editor drawing, public save, and first queued input to frame composition. Counters use wrap-safe monotonic elapsed times and reset on load; pending measurements cancel on pause/document change. No file writes, event logs, text capture or extra refresh requests are introduced. More > Memory & timing displays maxima on demand. Input-to-draw stops after app drawing and excludes Bluetooth transport, firmware input queue before callback entry and physical panel refresh; it is not key-to-visible-pixel latency.
+
+Lua 5.4 controller verification: layout 44, typing/snapshot/autosave 3,547, startup missing-file 24, controlled latency/timing 92 assertions (3,707 total). The controlled test checks exact 30 ms first-input deadline, no extension by later keys, draw/queue/layout/save timing, no extra writes, clock wrap and session reset. Synthetic elapsed times validate accounting only; real Bluetooth/e-ink performance remains unmeasured. Original cloud bc6ebcee-26df-4d19-b814-b9e488605d51; personal GitHub odklizec/inkWrite main.
+
 ## Maintenance 0.1.40 — 2026-11-01
 
 Startup now treats Last file not opened: not_found as a stale last-file preference, clears its saved filename/cursor, and opens a fresh uniquely named page. It never recreates the stale filename, overwrites another document, or removes recovery data. Valid recovery still takes precedence. Unreadable, oversized or invalid UTF-8 public files, unreadable/malformed recovery and failure to allocate a fresh filename remain protected. The existing 5/30-second autosave and coherent typing snapshot fix remain unchanged.
@@ -316,5 +324,6 @@ A deterministic 30,400-byte open/navigation/edit scenario reduced substring payl
 ## 0.1.37 Shortcuts and transient notices
 
 Swipe right starting within 32 pixels of the left screen edge to open the paged Shortcuts reference, including focus mode. Back restores the editor and its focus state; More > Keyboard help remains available. Text, caret and selection are preserved. This uses the existing page renderer without slide animation or additional buffers. Font-picker notices and other transient messages dismiss on the next deliberate touch/key action; file-job guards, protected state and save-failure indicators remain. Pointer movement and trailing keyboard releases do not dismiss a newly created notice.
+
 
 
