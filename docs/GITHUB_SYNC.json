@@ -1,23 +1,23 @@
 {
   "app": "inkWrite",
-  "version": "0.1.37",
+  "version": "0.1.38",
   "app_id": "inkwrite",
   "cloudProjectId": "bc6ebcee-26df-4d19-b814-b9e488605d51",
-  "cloudExportedAt": "2026-10-31T19:02:17.441Z",
+  "cloudExportedAt": "2026-11-01T08:04:04.041Z",
   "repository": "https://github.com/odklizec/inkWrite",
   "sourceFiles": 10,
   "runtimeAssets": 2,
   "sourceHashes": {
-    "README.md": "08b0f824fbb895dd5f31020cb5f895adaa8ad5e6",
-    "docs/HANDOVER.md": "9039d768623cb0b8a775b04484a4d3a103a7416d",
-    "domain/app.lua": "ea5a88be23a7b51620a158c8da2a7b4a1abee8ca",
+    "index.lua": "2461ea062fb48868e293a5a65cb17a606d9aac8e",
+    "keyboard.lua": "fa1c8cb8a973f1c9f7b3baf808d0dc097bf5d97e",
+    "manifest.json": "d3a8f8e98850f1054f19687dcd0b1ed890cd861c",
+    "README.md": "fa9d53626daf026fa13e738ba76b80e7793d9fdd",
+    "docs/HANDOVER.md": "d27590a6dc47cdd66caaec6d39327845bfe1af57",
+    "domain/app.lua": "3598dafd86739fe2fb093dd03c973c9ee1da93a9",
     "domain/buffer.lua": "2faf5d45ea92aea0c93d41fe379e06b79f6bd924",
     "domain/documents.lua": "71eee51dda8bd542ef72ac10949ef2c7ed1f6540",
     "domain/layout.lua": "7eb50c8179bbdcbb4d2f208ea45fdb723bc7e9af",
-    "domain/stats.lua": "fba59e98e8c2156a8fbbd8f1b5ac3ae00ef0f438",
-    "index.lua": "2461ea062fb48868e293a5a65cb17a606d9aac8e",
-    "keyboard.lua": "fa1c8cb8a973f1c9f7b3baf808d0dc097bf5d97e",
-    "manifest.json": "6a7c64e929e040c3ce49797529e65adc1a8f0150"
+    "domain/stats.lua": "fba59e98e8c2156a8fbbd8f1b5ac3ae00ef0f438"
   },
   "assetHashes": {
     "assets/app_icon_l.xic": "20b76b28bf5e9ec5408365f7d13da389f3ace3a9",

@@ -1,10 +1,23 @@
+## Maintenance 0.1.38 — 2026-11-01
+
+Editor, help and typography wrapping now runs before drawing in lifecycle,
+input or timer callbacks. Continuous typing retains its 80 ms frame deadline.
+Unexpected geometry changes queue one preparation and suspend stale text hit
+testing until the prepared frame is presented. Loading, file operations,
+custom font opens and layout explicitly extend the active callback budget.
+Final lifecycle recovery remains bounded and does not attempt to extend on_leave.
+Existing 32 KiB buffer, recovery-first saves, conflict copies, close choices,
+eight font attempts and sliced navigation/rename remain in place.
+Manifest and runtime version: 0.1.38; API 2.17. Physical-device timing remains
+unverified; desktop regressions cannot establish e-ink latency.
+
 # inkWrite handover
 
 ## Identity and scope
 
 - App ID: `inkwrite` (new app; preserve this ID for upgrades).
 - Version: `0.1.0`, development milestone A.
-- Manifest API: `2.11`; Gancao firmware support required.
+- Manifest API: `2.17`; Gancao firmware support required.
 - No network permission. Wireless export is explicitly outside release one.
 - inkStream is inspiration only; no inkStream app identity, saved files, artwork, or source has been overwritten.
 

@@ -1,6 +1,6 @@
 # inkWrite
 
-A quiet writing and journaling app for Xteink X4Pro and X4Classic. Current development build: **0.1.37**. Requires compatible Gancao firmware with XTApp API 2.11 support.
+A quiet writing and journaling app for Xteink X4Pro and X4Classic. Current development build: **0.1.38**. Requires compatible Gancao firmware with XTApp API 2.17 support.
 
 ## Start writing
 

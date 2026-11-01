@@ -3,9 +3,13 @@ local Docs=require("domain.documents")
 local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
-local M={VERSION="0.1.37"}
+local M={VERSION="0.1.38"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
+local prepare_frame
+local function extend_budget(ctx)
+  if ctx.budget then ctx.budget:extend() end
+end
 local function message(ctx,s) A.message=s; ctx:invalidate() end
 local function now(ctx) return ctx.clock:millis() end
 local function age(t,earlier) return (t-earlier)&0x7fffffff end
@@ -81,6 +85,7 @@ local function geometry(ctx)
   return l
 end
 local function refresh_layout(ctx)
+  extend_budget(ctx)
   local l=geometry(ctx); local b=A.buffer
   local f=font(ctx)
   local same=A.layout_font==f and A.layout_width==l.w and A.layout_count==l.count and A.layout_top==A.top
@@ -112,6 +117,7 @@ local function request_editor_frame(ctx)
   if A.redraw_timer then return end
   local timer=ctx:after(80,function(c)
     A.redraw_timer=nil
+    prepare_frame(c)
     c:invalidate()
   end)
   if timer then A.redraw_timer=timer else ctx:invalidate() end
@@ -168,6 +174,7 @@ local function format(ctx,marker)
   changed(ctx,a)
 end
 local function save(ctx)
+  extend_budget(ctx)
   A.typing_time=nil
   if A.blocked then message(ctx,"Recovery needs attention; existing files are protected"); return false end
   if not A.doc or not A.buffer then return false end
@@ -226,6 +233,7 @@ local function set_document(ctx,name,text,base,dirty)
   refresh_layout(ctx); ctx:invalidate()
 end
 local function new_document(ctx,plain)
+  extend_budget(ctx)
   if A.blocked then return end
   if A.dirty and not save(ctx) then return end
   local t=ctx.clock:now()
@@ -304,6 +312,7 @@ local function file_cells(ctx,l,row)
   return l.right-88,l.right-44,l.right-96
 end
 local function open_file(ctx,name)
+  extend_budget(ctx)
   if A.blocked then return end
   if A.dirty and not save(ctx) then return end
   local text,e=Docs.read(ctx,name)
@@ -312,6 +321,7 @@ local function open_file(ctx,name)
   ctx.state.last=name
 end
 local function today(ctx)
+  extend_budget(ctx)
   if A.blocked then return end
   local t=ctx.clock:now()
   if not t.valid then message(ctx,"Set the device date before opening today's journal");return end
@@ -327,6 +337,7 @@ local commands={"Back to writing","Save to SD card","New Markdown page","Open SD
 -- Native fonts live for the whole session. Keep successes AND failures so
 -- neither drawing nor repeated selection can retry allocations indefinitely.
 local function choose_font(ctx,name,px)
+  extend_budget(ctx)
   local f,e
   if name=="" then px=px>=28 and 30 or 24 end
   if name=="" then f=px>=28 and ctx.fonts.large or ctx.fonts.medium
@@ -466,6 +477,7 @@ local function chrome_action(ctx,i)
   ctx:invalidate()
 end
 function M.load(ctx)
+  extend_budget(ctx)
   A={view="editor",top=0,focus=1,large=ctx.state.large==true,caps=false,dirty=false,status="Unsaved",rows={}}
   A.stats=Stats.new(ctx)
   A.focus_mode=ctx.state.focus_mode==true
@@ -1071,6 +1083,8 @@ local function checkpoint_recovery(ctx)
   return false
 end
 function M.pause(ctx)
+  extend_budget(ctx)
+  if A.prepare_timer then A.prepare_timer:cancel();A.prepare_timer=nil end
   A.stats:pause(ctx)
   if A.file_job then A.file_job:cancel();A.file_job=nil;A.message="Rename interrupted; original kept; check the new copy" end
   A.keyboard:reset()
@@ -1084,6 +1098,7 @@ function M.pause(ctx)
 end
 function M.resume(ctx) A.stats:resume(ctx);ctx.input:listen({keyboard=true}); refresh_layout(ctx); ctx:invalidate() end
 function M.leave(ctx)
+  if A and A.prepare_timer then A.prepare_timer:cancel();A.prepare_timer=nil end
   if A and A.stats then A.stats:pause(ctx) end
   if A and A.file_job then A.file_job:cancel();A.file_job=nil end
   if A then cancel_navigation() end
@@ -1108,14 +1123,47 @@ local function pager(g,ui,l,page,pages)
     g:text(l.chrome_right-45,y,"Next",{font=ui,align="center",valign="middle"})
   end
 end
-local function help_view(ctx,g,ui,l,text)
-  local cache=A.help_cache
-  if not cache or cache.text~=text or cache.width~=l.w or cache.font~=ui then
-    cache={text=text,width=l.w,font=ui,rows=Layout.rows(assert(Buffer.new(text)),ui,l.w,0,128)};A.help_cache=cache
+local function help_text(ctx)
+  if A.view=="font_help" then return "Your type, your space\n\nPut .ttf files in the SD card fonts folder, then reopen inkWrite. Choose a font and size in Typography. System fonts are always available.\n\nCustom fonts use 20, 24, 28, 32 or 36 px. The actual line height comes from the font. Changes affect the editor, not your saved Markdown.\n\nTo protect memory, inkWrite tries at most eight custom font/size pairs per session. Unavailable fonts keep the previous choice. Save and reopen to reset the budget. Font coverage depends on the selected file."
+  elseif A.view=="files_help" then return "Your writing lives on the SD card:\n\n"..(ctx.files and ctx.files.path or "/AppFiles/inkwrite").."\n\nSave first. Power down the device, remove the SD card, then copy the .md or .txt files using a card reader.\n\nOpen them in any text editor. No account or conversion needed.\n\nPrivate recovery is removed on uninstall; saved public files remain."
+  elseif A.view=="help" then return "Ctrl+S   Save\nCtrl+N   New document\nCtrl+O   Open file\nCtrl+J   Today journal\nCtrl+Z   Undo\nCtrl+Shift+Z   Redo\nCtrl+A   Select all\nCtrl+C / X / V   Copy / cut / paste\nCtrl+B / I   Bold / italic (.md)\nCtrl+Shift+F   Toggle focus\nCtrl+R   Full screen refresh\n\nLeft / Right   Move character\nCtrl+Left / Right   Move word\nHome / End   Start / end of line\nCtrl+Home / End   Start / end of file\nPageUp / PageDown   Move page\nShift+movement   Select text\nEscape / Back   Return / menu\n\nTouch controls\nDouble-tap word   Select word\nTriple-tap word   Select sentence\nDouble-tap empty space   Focus\nSwipe up / down   Browse text\nLeft edge >   Shortcuts\nRight edge <   Statistics\nBottom edge up   Virtual keyboard\nKeyboard icon   Choose language\nWord count   Statistics\n\nType a letter before its accent.\nClipboard stays inside inkWrite."
   end
+end
+-- Layout is prepared in lifecycle/input/timer callbacks, never in draw.
+prepare_frame=function(ctx)
+  if not A or not A.buffer then return end
+  local l=geometry(ctx);local f=font(ctx);local ui=ctx.fonts.medium
+  if A.view=="editor" then
+    if A.layout_revision~=A.buffer.revision or A.layout_pos~=A.buffer.pos or A.layout_width~=l.w or A.layout_count~=l.count or A.layout_font~=f or A.layout_top~=A.top then refresh_layout(ctx) end
+  elseif A.view=="typography" then
+    local p=l.preview;local cache=A.preview_cache
+    if not cache or cache.font~=f or cache.width~=p.w or cache.count~=p.count then
+      extend_budget(ctx)
+      A.type_preview=A.type_preview or assert(Buffer.new(PREVIEW))
+      A.preview_cache={font=f,width=p.w,count=p.count,rows=Layout.rows(A.type_preview,f,p.w,0,p.count)}
+    end
+  else
+    local text=help_text(ctx)
+    if text then
+      local cache=A.help_cache
+      if not cache or cache.text~=text or cache.width~=l.w or cache.font~=ui then
+        extend_budget(ctx)
+        cache={text=text,width=l.w,font=ui,rows=Layout.rows(assert(Buffer.new(text)),ui,l.w,0,128)};A.help_cache=cache
+      end
+      local count=math.max(1,(l.list_bottom-l.body)//(ui.line_height+6))
+      A.help_pages=math.max(1,(#cache.rows+count-1)//count)
+      A.help_page=math.max(1,math.min(A.help_page or 1,A.help_pages))
+    end
+  end
+  A.prepared={view=A.view,key=l.key,font=f,revision=A.buffer.revision,pos=A.buffer.pos,top=A.top}
+end
+local function frame_ready(l,f)
+  local p=A.prepared
+  return p and p.view==A.view and p.key==l.key and p.font==f and p.revision==A.buffer.revision and p.pos==A.buffer.pos and p.top==A.top
+end
+local function help_view(ctx,g,ui,l)
+  local cache=A.help_cache
   local count=math.max(1,(l.list_bottom-l.body)//(ui.line_height+6))
-  A.help_pages=math.max(1,(#cache.rows+count-1)//count)
-  A.help_page=math.max(1,math.min(A.help_page or 1,A.help_pages))
   local first=(A.help_page-1)*count+1
   for i=first,math.min(#cache.rows,first+count-1) do g:text(l.x,l.body+(i-first)*(ui.line_height+6),cache.rows[i].text,{font=ui}) end
   pager(g,ui,l,A.help_page,A.help_pages)
@@ -1229,10 +1277,21 @@ function M.draw(ctx,g)
   if not A then return end
   local l=geometry(ctx); local f=font(ctx); local ui=ctx.fonts.medium
   g:clear(0)
+  if not frame_ready(l,f) then
+    -- Geometry can change without an input event. Queue one preparation and
+    -- refuse hit testing against the previous screen until it is presented.
+    A.touch_rows=nil;A.touch_geometry=nil
+    if not A.prepare_timer then
+      A.prepare_timer=ctx:after(1,function(c)
+        A.prepare_timer=nil;prepare_frame(c);c:invalidate()
+      end)
+    end
+    box(g,ui,l.x,l.body,l.w,80,A.prepare_timer and "Preparing text..." or "Text preparation unavailable. Reopen inkWrite.")
+    return
+  end
   local focused=A.focus_mode and A.view=="editor"
   if A.view~="editor" then editor_chrome(ctx,g,l) end
   if A.view=="editor" then
-    if A.layout_revision~=A.buffer.revision or A.layout_pos~=A.buffer.pos or A.layout_width~=l.w or A.layout_count~=l.count or A.layout_font~=f then refresh_layout(ctx) end
     A.touch_rows=A.rows;A.touch_revision=A.buffer.revision;A.touch_font=f;A.touch_doc=A.doc;A.touch_geometry=l.key
     if A.buffer.size==0 then box(g,ui,l.x,l.body+56,l.w,100,"A little space to write.\nConnect your Bluetooth keyboard.") end
     local ca,cz=selection()
@@ -1284,11 +1343,7 @@ function M.draw(ctx,g)
   elseif A.view=="typography" then
     local small=ctx.fonts.small or ui
     local p=l.preview
-    if not A.type_preview then A.type_preview=assert(Buffer.new(PREVIEW)) end
     local cache=A.preview_cache
-    if not cache or cache.font~=f or cache.width~=p.w or cache.count~=p.count then
-      cache={font=f,width=p.w,count=p.count,rows=Layout.rows(A.type_preview,f,p.w,0,p.count)};A.preview_cache=cache
-    end
     for i,row in ipairs(cache.rows) do g:text(p.x,p.y+(i-1)*l.step,row.text,{font=f}) end
     if l.type_notice then box(g,small,l.x,l.type_notice_y,l.w,48,l.type_notice) end
     for _,label in ipairs(l.type_labels) do g:text(label.x,label.y,label.text,{font=small}) end
@@ -1326,7 +1381,7 @@ function M.draw(ctx,g)
     end
     pager(g,ui,l,1,1)
   elseif A.view=="font_help" then
-    help_view(ctx,g,ui,l,"Your type, your space\n\nPut .ttf files in the SD card fonts folder, then reopen inkWrite. Choose a font and size in Typography. System fonts are always available.\n\nCustom fonts use 20, 24, 28, 32 or 36 px. The actual line height comes from the font. Changes affect the editor, not your saved Markdown.\n\nTo protect memory, inkWrite tries at most eight custom font/size pairs per session. Unavailable fonts keep the previous choice. Save and reopen to reset the budget. Font coverage depends on the selected file.")
+    help_view(ctx,g,ui,l)
   elseif A.view=="orientation_help" then
     for i,label in ipairs({"Portrait","Horizontal"}) do
       local cx=l.x+l.w*(2*i-1)//4;local x=cx-(i==1 and 18 or 30);local y=l.body+24
@@ -1340,9 +1395,9 @@ function M.draw(ctx,g)
     box(g,ctx.fonts.small or ui,l.x,l.body+170,l.w,60,"Rotation follows device settings.")
     pager(g,ui,l,1,1)
   elseif A.view=="files_help" then
-    help_view(ctx,g,ui,l,"Your writing lives on the SD card:\n\n"..(ctx.files and ctx.files.path or "/AppFiles/inkwrite").."\n\nSave first. Power down the device, remove the SD card, then copy the .md or .txt files using a card reader.\n\nOpen them in any text editor. No account or conversion needed.\n\nPrivate recovery is removed on uninstall; saved public files remain.")
+    help_view(ctx,g,ui,l)
   elseif A.view=="help" then
-    help_view(ctx,g,ui,l,"Ctrl+S   Save\nCtrl+N   New document\nCtrl+O   Open file\nCtrl+J   Today journal\nCtrl+Z   Undo\nCtrl+Shift+Z   Redo\nCtrl+A   Select all\nCtrl+C / X / V   Copy / cut / paste\nCtrl+B / I   Bold / italic (.md)\nCtrl+Shift+F   Toggle focus\nCtrl+R   Full screen refresh\n\nLeft / Right   Move character\nCtrl+Left / Right   Move word\nHome / End   Start / end of line\nCtrl+Home / End   Start / end of file\nPageUp / PageDown   Move page\nShift+movement   Select text\nEscape / Back   Return / menu\n\nTouch controls\nDouble-tap word   Select word\nTriple-tap word   Select sentence\nDouble-tap empty space   Focus\nSwipe up / down   Browse text\nLeft edge >   Shortcuts\nRight edge <   Statistics\nBottom edge up   Virtual keyboard\nKeyboard icon   Choose language\nWord count   Statistics\n\nType a letter before its accent.\nClipboard stays inside inkWrite.")
+    help_view(ctx,g,ui,l)
   end
   if l.footer then
   g:line(l.x,l.foot,l.right,l.foot)
@@ -1382,6 +1437,16 @@ function M.draw(ctx,g)
       g:rect(r.x+(i-1)*w+6,r.y+126,w-12,52,{fill=modal.choice==i,radius=4})
       g:text(r.x+(i-1)*w+w//2,r.y+152,label,{font=small,align="center",valign="middle",color=modal.choice==i and 0 or 15})
     end
+  end
+end
+-- Input bursts retain the existing 80 ms frame deadline; its timer prepares
+-- the latest revision. Other navigation/lifecycle changes prepare immediately.
+for _,name in ipairs({"load","input","tick","resume"}) do
+  local callback=M[name]
+  M[name]=function(ctx,...)
+    local result=callback(ctx,...)
+    if A and not A.redraw_timer then prepare_frame(ctx) end
+    return result
   end
 end
 -- Desktop harness uses the real controller through public lifecycle functions.
