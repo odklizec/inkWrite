@@ -21,7 +21,7 @@ local function draw()drawn={};drawing=true;App.draw(ctx,g);drawing=false;for _,s
 local function key(code,text,mods)App.input(ctx,{type='key',source='keyboard',phase='down',code=code,text=text,mods=mods or {}})end
 local function find(s)for _,v in ipairs(drawn)do if v==s then return true end end end
 draw();check(find('hello ž world'),'initial text')
-key('KeyA',nil,{ctrl=true});advance(80);draw();local old=A.prepared
+key('KeyA',nil,{ctrl=true});draw();local old=A.prepared
 check(A.anchor==0 and A.buffer.pos==A.buffer.size,'full document selected')
 key('KeyQ','q');check(A.buffer:text()=='q','replacement live')
 draw();check(A.prepared==old and find('hello ž world'),'old snapshot survives replacement');check(A.touch_revision~=A.buffer.revision,'stale touch tagged honestly')
@@ -31,7 +31,7 @@ key('KeyX','x');draw();check(A.prepared==prepared and find('q'),'edit after prep
 advance(240);draw();check(find('qx'),'next deadline publishes new text')
 for i=1,200 do ctx.time=240+i*40;key('KeyA','a');if i%2==0 then advance(ctx.time)end;draw()end
 advance(ctx.time+80);draw();check(A.prepared.revision==A.buffer.revision,'continuous typing eventually current')
-key('KeyA','a');draw();local p=A.buffer.pos
+key('KeyA','a');draw();key('KeyA','a');draw();local p=A.buffer.pos
 App.input(ctx,{type='pointer',phase='up',gesture='tap',x=40,y=90});check(A.buffer.pos==p,'stale tap cannot move caret')
 key('KeyA','a');draw();check(A.prepare_timer==nil,'notice geometry prepares before drawing even during burst')
 -- Boundary times: 5 idle seconds; continuously dirty no longer than 30 s.
@@ -53,6 +53,8 @@ check(A.prepare_timer~=nil and A.touch_geometry==nil,'rotation schedules recover
 advance(ctx.time+1);draw();check(A.prepared.key==A.touch_geometry,'rotation publishes matching geometry')
 ctx.fail_timer=true;key('KeyA','a');draw();check(A.prepared.revision==A.buffer.revision,'timer exhaustion prepares synchronously outside draw')
 return n
+
+
 
 
 

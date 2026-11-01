@@ -1,3 +1,11 @@
+## Maintenance 0.1.42 — 2026-11-01
+
+Typing/navigation after idle now prepares a coherent editor snapshot and requests a frame in the input callback, avoiding the initial timer wait. A 30 ms cooldown groups subsequent inputs on a fixed deadline. If a cooldown expires with no changes, it does not prepare or request another frame. A changed window prepares once and starts the next cooldown. Byte revision, caret, selection anchor, document, font, geometry and viewport changes are checked. Timer exhaustion falls back to immediate preparation. Pause/document-switch cancellation, stale-touch guards, missing-last-file startup handling and 5/30-second autosave remain intact.
+
+Session diagnostics remain app-side only, excluding Bluetooth and physical panel refresh. The owner reported previous maxima of input 16 ms, layout 12 ms, draw 10 ms, queue 197 ms, save 203 ms and input-to-draw 269 ms. Those independent maxima do not prove which event caused the queue delay. This update removes the timer dependency for the first input after idle; it does not guarantee a particular key-to-visible-pixel latency.
+
+Verification includes immediate first preparation, fixed batched deadline, no duplicate standalone refresh, selection-only updates, stale text touch rejection, save accounting and clock wrap, plus existing layout/recovery/startup tests. Exact assertion counts and final cloud/GitHub identity are recorded in the release verification artifact. Original cloud project bc6ebcee-26df-4d19-b814-b9e488605d51; GitHub odklizec/inkWrite main. Physical-device latency remains unmeasured.
+
 ## Maintenance 0.1.41 — 2026-11-01
 
 Reduced the typing/navigation burst deadline from 80 ms to 30 ms. It remains a fixed first-input deadline, not a trailing debounce; later keys share the timer rather than postponing it. The coherent prepared editor snapshot, stale touch guard, 5/30-second autosave and missing-last-file startup fix remain intact.
@@ -324,6 +332,7 @@ A deterministic 30,400-byte open/navigation/edit scenario reduced substring payl
 ## 0.1.37 Shortcuts and transient notices
 
 Swipe right starting within 32 pixels of the left screen edge to open the paged Shortcuts reference, including focus mode. Back restores the editor and its focus state; More > Keyboard help remains available. Text, caret and selection are preserved. This uses the existing page renderer without slide animation or additional buffers. Font-picker notices and other transient messages dismiss on the next deliberate touch/key action; file-job guards, protected state and save-failure indicators remain. Pointer movement and trailing keyboard releases do not dismiss a newly created notice.
+
 
 
 

@@ -3,7 +3,7 @@ local Docs=require("domain.documents")
 local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
-local M={VERSION="0.1.41"}
+local M={VERSION="0.1.42"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 local prepare_frame
@@ -116,16 +116,24 @@ local function cancel_redraw()
   A.pending_frame_since=nil
 end
 local function request_editor_frame(ctx)
-  -- One deadline for a burst, not a trailing debounce: continuous typing
-  -- still gets periodic frames. Capture every edit before requesting paint.
-  if A.redraw_timer then return end
+  -- First input after idle is prepared immediately. Subsequent inputs share
+  -- the fixed cooldown deadline; an unchanged window needs no second frame.
+  if A.redraw_timer then
+    A.pending_frame_since=A.pending_frame_since or A.input_started or now(ctx)
+    return
+  end
   A.pending_frame_since=A.input_started or now(ctx)
-  local timer=ctx:after(30,function(c)
+  local function flush(c)
     A.redraw_timer=nil
-    prepare_frame(c)
-    c:invalidate()
-  end)
-  if timer then A.redraw_timer=timer else ctx:invalidate() end
+    local p=A.prepared;local l=geometry(c)
+    if not p or p.doc~=A.doc or p.view~=A.view or p.key~=l.key or p.font~=font(c)
+      or p.revision~=A.buffer.revision or p.pos~=A.buffer.pos or p.top~=A.top or p.anchor~=A.anchor then
+      A.redraw_timer=c:after(30,flush)
+      prepare_frame(c);c:invalidate()
+    else A.pending_frame_since=nil end
+  end
+  A.redraw_timer=ctx:after(30,flush)
+  prepare_frame(ctx);ctx:invalidate()
 end
 local function changed(ctx,from)
   if A.stats then A.stats:edit(ctx,0) end
@@ -1178,7 +1186,7 @@ prepare_frame=function(ctx)
       A.help_page=math.max(1,math.min(A.help_page or 1,A.help_pages))
     end
   end
-  local p={view=A.view,key=l.key,font=f,doc=A.doc,revision=A.buffer.revision,pos=A.buffer.pos,top=A.top}
+  local p={view=A.view,key=l.key,font=f,doc=A.doc,revision=A.buffer.revision,pos=A.buffer.pos,top=A.top,anchor=A.anchor}
   if A.view=="editor" then
     -- A composed frame may run after another edit. Keep rows and all byte-
     -- dependent drawing data together; never slice the newer buffer in draw.
@@ -1488,7 +1496,7 @@ function M.draw(ctx,g)
     end
   end
 end
--- Input bursts share a 30 ms frame deadline; its timer prepares
+-- First input after idle prepares immediately; bursts share a 30 ms deadline.
 -- the latest revision. Other navigation/lifecycle changes prepare immediately.
 for _,name in ipairs({"load","input","tick","resume"}) do
   local callback=M[name]
