@@ -3,7 +3,7 @@ local Docs=require("domain.documents")
 local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
-local M={VERSION="0.1.38"}
+local M={VERSION="0.1.39"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 local prepare_frame
@@ -1071,7 +1071,7 @@ function M.tick(ctx)
   if A.close_modal then return end
   if A.dirty and not A.blocked and not A.save_failed then
     local t=now(ctx)
-    if age(t,A.last_edit)>=2000 or age(t,A.first_dirty)>=10000 then save(ctx) end
+    if age(t,A.last_edit)>=5000 or age(t,A.first_dirty)>=30000 then save(ctx) end
   end
 end
 -- A successful snapshot already protects this exact document revision.
@@ -1155,11 +1155,33 @@ prepare_frame=function(ctx)
       A.help_page=math.max(1,math.min(A.help_page or 1,A.help_pages))
     end
   end
-  A.prepared={view=A.view,key=l.key,font=f,revision=A.buffer.revision,pos=A.buffer.pos,top=A.top}
+  local p={view=A.view,key=l.key,font=f,doc=A.doc,revision=A.buffer.revision,pos=A.buffer.pos,top=A.top}
+  if A.view=="editor" then
+    -- A composed frame may run after another edit. Keep rows and all byte-
+    -- dependent drawing data together; never slice the newer buffer in draw.
+    p.rows=A.rows;p.size=A.buffer.size;p.selection={}
+    local ca,cz=selection()
+    for i,r in ipairs(p.rows) do
+      local sa,sz=math.max(ca,r.a),math.min(cz,r.z)
+      if sz>sa then
+        local text=r.text:sub(sa-r.a+1,sz-r.a)
+        p.selection[i]={x=f:measure(r.text:sub(1,sa-r.a)),w=f:measure(text),text=text}
+      end
+    end
+    local ci=Layout.caret_row(p.rows,p.pos)
+    if ci then
+      local r=p.rows[ci]
+      p.caret={row=ci,x=f:measure(r.text:sub(1,p.pos-r.a))}
+    end
+  end
+  A.prepared=p
 end
 local function frame_ready(l,f)
   local p=A.prepared
-  return p and p.view==A.view and p.key==l.key and p.font==f and p.revision==A.buffer.revision and p.pos==A.buffer.pos and p.top==A.top
+  if not p or p.view~=A.view or p.key~=l.key or p.font~=f or p.doc~=A.doc then return false end
+  -- While a typing burst waits for its deadline, present the last coherent
+  -- snapshot. Its revision remains attached to text hit testing below.
+  return A.view=="editor" or p.revision==A.buffer.revision and p.pos==A.buffer.pos and p.top==A.top
 end
 local function help_view(ctx,g,ui,l)
   local cache=A.help_cache
@@ -1168,15 +1190,15 @@ local function help_view(ctx,g,ui,l)
   for i=first,math.min(#cache.rows,first+count-1) do g:text(l.x,l.body+(i-first)*(ui.line_height+6),cache.rows[i].text,{font=ui}) end
   pager(g,ui,l,A.help_page,A.help_pages)
 end
-local function position_line(ctx,g,l)
-  local n=A.buffer.size;local last=A.rows[#A.rows]
-  if n==0 or (A.top==0 and last and last.z==n) then return end
-  local visible=last and math.max(0,last.nextp-A.top) or 0
+local function position_line(ctx,g,l,p)
+  local n=p.size;local last=p.rows[#p.rows]
+  if n==0 or (p.top==0 and last and last.z==n) then return end
+  local visible=last and math.max(0,last.nextp-p.top) or 0
   local o=ctx.screen.occlusion or {right=0}
   local horizontal=ctx.screen.width>ctx.screen.height
   local length=horizontal and l.w or l.text_bottom-l.body
   local size=n==0 and length or math.min(length,math.max(12,length*visible//n))
-  local offset=n<=visible and 0 or math.min(length-size,(length-size)*A.top//math.max(1,n-visible))
+  local offset=n<=visible and 0 or math.min(length-size,(length-size)*p.top//math.max(1,n-visible))
   if horizontal then
     local y=l.foot-7
     g:line(l.x,y,l.right,y)
@@ -1292,25 +1314,23 @@ function M.draw(ctx,g)
   local focused=A.focus_mode and A.view=="editor"
   if A.view~="editor" then editor_chrome(ctx,g,l) end
   if A.view=="editor" then
-    A.touch_rows=A.rows;A.touch_revision=A.buffer.revision;A.touch_font=f;A.touch_doc=A.doc;A.touch_geometry=l.key
-    if A.buffer.size==0 then box(g,ui,l.x,l.body+56,l.w,100,"A little space to write.\nConnect your Bluetooth keyboard.") end
-    local ca,cz=selection()
-    for i,r in ipairs(A.rows) do
+    local p=A.prepared
+    A.touch_rows=p.rows;A.touch_revision=p.revision;A.touch_font=f;A.touch_doc=p.doc;A.touch_geometry=l.key
+    if p.size==0 then box(g,ui,l.x,l.body+56,l.w,100,"A little space to write.\nConnect your Bluetooth keyboard.") end
+    for i,r in ipairs(p.rows) do
       local y=l.body+(i-1)*l.step
-      local sa,sz=math.max(ca,r.a),math.min(cz,r.z)
-      if sz>sa then
-        local x=f:measure(A.buffer:slice(r.a,sa)); local w=f:measure(A.buffer:slice(sa,sz))
-        g:rect(l.x+x,y,w,f.line_height,{color=15,fill=true})
+      local s=p.selection[i]
+      if s then
+        g:rect(l.x+s.x,y,s.w,f.line_height,{color=15,fill=true})
         g:text(l.x,y,r.text,{font=f,color=15})
-        g:text(l.x+x,y,A.buffer:slice(sa,sz),{font=f,color=0})
+        g:text(l.x+s.x,y,s.text,{font=f,color=0})
       else g:text(l.x,y,r.text,{font=f}) end
     end
-    local ci=Layout.caret_row(A.rows,A.buffer.pos)
-    if ci then
-      local r=A.rows[ci]; local x=f:measure(A.buffer:slice(r.a,A.buffer.pos)); local y=l.body+(ci-1)*l.step
-      g:line(l.x+x,y,l.x+x,y+f.line_height,{line_width=2})
+    if p.caret then
+      local x=l.x+p.caret.x;local y=l.body+(p.caret.row-1)*l.step
+      g:line(x,y,x,y+f.line_height,{line_width=2})
     end
-    position_line(ctx,g,l)
+    position_line(ctx,g,l,p)
     editor_chrome(ctx,g,l)
   elseif A.view=="statistics" then
     local small=ctx.fonts.small or ui;local mode=A.stats_mode or 1
@@ -1445,7 +1465,7 @@ for _,name in ipairs({"load","input","tick","resume"}) do
   local callback=M[name]
   M[name]=function(ctx,...)
     local result=callback(ctx,...)
-    if A and not A.redraw_timer then prepare_frame(ctx) end
+    if A and (not A.redraw_timer or not frame_ready(geometry(ctx),font(ctx))) then prepare_frame(ctx) end
     return result
   end
 end

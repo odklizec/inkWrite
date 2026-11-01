@@ -1,26 +1,33 @@
 {
   "app": "inkWrite",
-  "version": "0.1.38",
-  "app_id": "inkwrite",
+  "version": "0.1.39",
   "cloudProjectId": "bc6ebcee-26df-4d19-b814-b9e488605d51",
-  "cloudExportedAt": "2026-11-01T08:04:04.041Z",
-  "repository": "https://github.com/odklizec/inkWrite",
-  "sourceFiles": 10,
-  "runtimeAssets": 2,
-  "sourceHashes": {
+  "repository": "odklizec/inkWrite",
+  "branch": "main",
+  "parent": "6b2cb58e0dd8e111a9f9f505bfc01d7fe9a83d02",
+  "cloudSave": "Studio Saved to your cloud workspace confirmation observed; post-save export identity/version/source checked",
+  "verification": {
+    "layoutAssertions": 44,
+    "typingSnapshotAutosaveAssertions": 3231,
+    "runtime": "Lua 5.4 mocks",
+    "hardware": "not tested",
+    "automatedPreview": "did not complete; original Studio editor showed zero errors, eleven warnings"
+  },
+  "shippingBlobs": {
     "index.lua": "2461ea062fb48868e293a5a65cb17a606d9aac8e",
     "keyboard.lua": "fa1c8cb8a973f1c9f7b3baf808d0dc097bf5d97e",
-    "manifest.json": "d3a8f8e98850f1054f19687dcd0b1ed890cd861c",
-    "README.md": "fa9d53626daf026fa13e738ba76b80e7793d9fdd",
-    "docs/HANDOVER.md": "d27590a6dc47cdd66caaec6d39327845bfe1af57",
-    "domain/app.lua": "3598dafd86739fe2fb093dd03c973c9ee1da93a9",
+    "manifest.json": "4f28768c3bab43609d4aa25f91afb67a4db2ce00",
+    "README.md": "4727828253c58d99165ca27457a43aaa729d5fb0",
+    "docs/HANDOVER.md": "8aa687cd91ab05fe99df2689b6e27821631d61ec",
+    "domain/app.lua": "4b34a0de8c551829735a939dea7b732e916ac31b",
     "domain/buffer.lua": "2faf5d45ea92aea0c93d41fe379e06b79f6bd924",
     "domain/documents.lua": "71eee51dda8bd542ef72ac10949ef2c7ed1f6540",
     "domain/layout.lua": "7eb50c8179bbdcbb4d2f208ea45fdb723bc7e9af",
-    "domain/stats.lua": "fba59e98e8c2156a8fbbd8f1b5ac3ae00ef0f438"
-  },
-  "assetHashes": {
+    "domain/stats.lua": "fba59e98e8c2156a8fbbd8f1b5ac3ae00ef0f438",
     "assets/app_icon_l.xic": "20b76b28bf5e9ec5408365f7d13da389f3ace3a9",
-    "assets/app_icon_s.xic": "075c6e4b1f68d87f2a7bf40b928f3fc5821933d7"
+    "assets/app_icon_s.xic": "075c6e4b1f68d87f2a7bf40b928f3fc5821933d7",
+    "artwork/raw/app_icon_l.png": "406e9117ed409b62621480cba857d86db32cfcd6",
+    "artwork/raw/app_icon_s.png": "8c9f3ccfed83343c35a0ca01145c061e1eecde15",
+    "artwork/presentation/store_cover.png": "c1671b4031346108f20017ca4845e20861ba7637"
   }
 }
