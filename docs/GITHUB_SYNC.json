@@ -1,14 +1,15 @@
 {
   "app": "inkWrite",
-  "version": "0.1.39",
+  "version": "0.1.40",
   "cloudProjectId": "bc6ebcee-26df-4d19-b814-b9e488605d51",
   "repository": "odklizec/inkWrite",
   "branch": "main",
-  "parent": "6b2cb58e0dd8e111a9f9f505bfc01d7fe9a83d02",
+  "parent": "c58a5bfc592ca6f2aff29bb077f6ed7727d851c5",
   "cloudSave": "Studio Saved to your cloud workspace confirmation observed; post-save export identity/version/source checked",
   "verification": {
     "layoutAssertions": 44,
     "typingSnapshotAutosaveAssertions": 3231,
+    "startupMissingFileAssertions": 24,
     "runtime": "Lua 5.4 mocks",
     "hardware": "not tested",
     "automatedPreview": "did not complete; original Studio editor showed zero errors, eleven warnings"
@@ -16,10 +17,10 @@
   "shippingBlobs": {
     "index.lua": "2461ea062fb48868e293a5a65cb17a606d9aac8e",
     "keyboard.lua": "fa1c8cb8a973f1c9f7b3baf808d0dc097bf5d97e",
-    "manifest.json": "4f28768c3bab43609d4aa25f91afb67a4db2ce00",
-    "README.md": "4727828253c58d99165ca27457a43aaa729d5fb0",
-    "docs/HANDOVER.md": "8aa687cd91ab05fe99df2689b6e27821631d61ec",
-    "domain/app.lua": "4b34a0de8c551829735a939dea7b732e916ac31b",
+    "manifest.json": "3355d2896ea461c58d057512271a910149a0cf74",
+    "README.md": "21ce89d15894c34b3060d4e4ac8720a070ed5312",
+    "docs/HANDOVER.md": "a093e510e976bf101f741c2b946b998c63783d59",
+    "domain/app.lua": "b9760b8abc1359169bf0a29d761de5e117d96f6e",
     "domain/buffer.lua": "2faf5d45ea92aea0c93d41fe379e06b79f6bd924",
     "domain/documents.lua": "71eee51dda8bd542ef72ac10949ef2c7ed1f6540",
     "domain/layout.lua": "7eb50c8179bbdcbb4d2f208ea45fdb723bc7e9af",

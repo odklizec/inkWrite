@@ -3,7 +3,7 @@ local Docs=require("domain.documents")
 local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
-local M={VERSION="0.1.39"}
+local M={VERSION="0.1.40"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 local prepare_frame
@@ -239,9 +239,10 @@ local function new_document(ctx,plain)
   local t=ctx.clock:now()
   local prefix=t.valid and string.format("%04d-%02d-%02d",t.year,t.month,t.day) or "undated"
   local name,e=Docs.fresh_name(ctx,prefix,plain and ".txt" or ".md")
-  if not name then message(ctx,tostring(e)); return end
+  if not name then message(ctx,tostring(e)); return false end
   set_document(ctx,name,"",nil,true)
   A.message=nil
+  return true
 end
 local function library(ctx)
   if A.dirty and not save(ctx) then return end
@@ -515,6 +516,15 @@ function M.load(ctx)
       set_document(ctx,ctx.state.last,s,s,false)
       local p=ctx.state.cursor
       if type(p)=="number" and p%1==0 and A.buffer:is_boundary(p) then A.buffer:seek(p) end
+    elseif se=="not_found" then
+      -- A missing remembered file is a stale preference, not a reason to
+      -- lock every document. Detach it before allocating a fresh filename.
+      ctx.state.last=nil;ctx.state.cursor=nil
+      if new_document(ctx) then
+        A.message="Previous file is missing; opened a new page."
+      else
+        A.blocked=true;A.view="files_help"
+      end
     else
       -- Never turn a failed load into an empty overwrite of the same file.
       A.message="Last file not opened: "..tostring(se); A.view="files_help"; A.blocked=true

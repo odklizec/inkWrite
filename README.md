@@ -1,6 +1,6 @@
 # inkWrite
 
-A quiet writing and journaling app for Xteink X4Pro and X4Classic. Current development build: **0.1.39**. Requires compatible Gancao firmware with XTApp API 2.17 support.
+A quiet writing and journaling app for Xteink X4Pro and X4Classic. Current development build: **0.1.40**. Requires compatible Gancao firmware with XTApp API 2.17 support.
 
 ## Start writing
 
@@ -106,4 +106,5 @@ A deterministic 30,400-byte open/navigation/edit scenario reduced substring payl
 ## 0.1.37 Shortcuts and transient notices
 
 Swipe right starting within 32 pixels of the left screen edge to open the paged Shortcuts reference, including focus mode. Back restores the editor and its focus state; More > Keyboard help remains available. Text, caret and selection are preserved. This uses the existing page renderer without slide animation or additional buffers. Font-picker notices and other transient messages dismiss on the next deliberate touch/key action; file-job guards, protected state and save-failure indicators remain. Pointer movement and trailing keyboard releases do not dismiss a newly created notice.
+
 

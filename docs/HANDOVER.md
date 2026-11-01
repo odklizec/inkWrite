@@ -1,3 +1,9 @@
+## Maintenance 0.1.40 — 2026-11-01
+
+Startup now treats Last file not opened: not_found as a stale last-file preference, clears its saved filename/cursor, and opens a fresh uniquely named page. It never recreates the stale filename, overwrites another document, or removes recovery data. Valid recovery still takes precedence. Unreadable, oversized or invalid UTF-8 public files, unreadable/malformed recovery and failure to allocate a fresh filename remain protected. The existing 5/30-second autosave and coherent typing snapshot fix remain unchanged.
+
+Verified with Lua 5.4 controller mocks: startup missing-file suite 24 assertions, existing layout suite 44, typing/snapshot/autosave suite 3,231 (3,299 total). Physical-device startup acceptance remains unverified. Original Studio project bc6ebcee-26df-4d19-b814-b9e488605d51; personal GitHub odklizec/inkWrite main.
+
 ## Maintenance 0.1.39 — 2026-11-01
 
 Fixed the recurring Preparing text... screen during typing. Prepared editor frames now retain a coherent bounded snapshot of visible rows, selected text and its measured rectangles, caret position and scroll-indicator inputs. Drawing can present that snapshot while a newer buffer revision waits for the existing 80 ms burst deadline. Drawing never slices the newer buffer using old row offsets. Text hit testing retains the actual displayed document/revision and rejects stale edits. Geometry/font/view/document changes prepare immediately in lifecycle/input callbacks even when a burst timer is pending; unexpected geometry changes during draw retain the existing one-shot recovery path. No whole-document copy, new font or framebuffer added.
@@ -310,4 +316,5 @@ A deterministic 30,400-byte open/navigation/edit scenario reduced substring payl
 ## 0.1.37 Shortcuts and transient notices
 
 Swipe right starting within 32 pixels of the left screen edge to open the paged Shortcuts reference, including focus mode. Back restores the editor and its focus state; More > Keyboard help remains available. Text, caret and selection are preserved. This uses the existing page renderer without slide animation or additional buffers. Font-picker notices and other transient messages dismiss on the next deliberate touch/key action; file-job guards, protected state and save-failure indicators remain. Pointer movement and trailing keyboard releases do not dismiss a newly created notice.
+
 
