@@ -1,18 +1,20 @@
 # inkWrite
 
-A quiet writing and journaling app for Xteink X4Pro and X4Classic. Current development build: **0.1.42**. Requires compatible Gancao firmware with XTApp API 2.17 support.
+A quiet writing and journaling app for Xteink X4Pro and X4Classic. Current development build: **0.1.45**. Requires compatible Gancao firmware with XTApp API 2.18 support.
 
 ## Start writing
 
 Pair a Bluetooth keyboard in the device settings, then open inkWrite. The main dock offers **New, Open, Save, Settings**. New offers today's journal, a Markdown page or a plain-text page. Ctrl+J opens or creates today's journal.
 
-On Pro, open the on-screen keyboard through **Settings → Keyb.** or swipe up from the bottom edge. Hide, Back or a downward swipe across the keyboard dismisses it. The large Space and tall Enter keys support touch writing. Classic can navigate the virtual keys with its direction buttons and OK.
+On Pro, open the on-screen keyboard through **Settings → Keyb. → On-screen keyboard** or swipe up from the bottom edge. Hide, Back or a downward swipe across the keyboard dismisses it. The large Space and tall Enter keys support touch writing. Classic can navigate the virtual keys with its direction buttons and OK.
 
 ## Languages and accents
 
-Tap the keyboard icon or US/CZ/SK abbreviation to choose English US, Czech QWERTZ/QWERTY, Slovak QWERTZ/QWERTY, German QWERTZ, French AZERTY, Spanish (Spain), Italian, Portuguese (Portugal) or Portuguese (Brazil ABNT2). The abbreviation shows the selected layout, not Bluetooth connection status.
+Choose your languages with checkboxes in **Settings → Keyb.** English (US) is the default; at least one layout must stay selected. Tap the status keyboard icon or language abbreviation to switch among selected layouts, or press **Left Alt+Shift**. The abbreviation shows the active layout, not Bluetooth connection status.
 
-Type the letter **before** the accent: `c` then `ˇ` becomes `č`; `e` then `´` becomes `é`. Unsupported combinations insert the accent literally. Accent replacement has its own undo step. Right Alt provides AltGr on supported layouts. Caps Lock is app-local and does not synchronize keyboard LEDs. The language popup pages when needed; use Prev/Next or arrow/page keys. German/French Ctrl shortcuts follow the printed letters. Bluetooth variants must match the selected layout; special ISO/ABNT keys depend on the positions exposed by firmware. On Brazilian layouts AltGr+Q also provides `/`. More variants are planned.
+Available: English US, Czech and Slovak QWERTZ/QWERTY, German, French, Spanish, Italian, Portuguese Portugal/Brazil, Romanian Standard, Russian, Ukrainian, Hungarian, Vietnamese, Polish Programmers, Turkish Q, Dutch, Swedish, Danish, Norwegian, Finnish and Greek. All are left-to-right.
+
+Type the letter **before** the accent: `c` then `ˇ` becomes `č`; `e` then `´` becomes `é`. Unsupported combinations insert the accent literally. Accent replacement has its own undo step. Right Alt provides AltGr on supported layouts. Caps Lock is app-local and does not synchronize keyboard LEDs. The language popup pages when needed; use Prev/Next or arrow/page keys. German/French Ctrl shortcuts follow the printed letters. Bluetooth variants must match the selected layout; special ISO/ABNT keys depend on the positions exposed by firmware. On Brazilian layouts AltGr+Q also provides `/`. Vietnamese uses the standard physical layout and post-vowel tone marks on the virtual national row; no IME or dictionary is included.
 
 ## Touch selection and focus
 
@@ -30,7 +32,7 @@ Settings → Type offers font selection, size, line spacing and margins. A sampl
 
 Place `.ttf` fonts in the SD card's fonts folder and reopen the app. System sizes are 24/30 px; custom sizes are 20/24/28/32/36 px. Glyph coverage depends on the font. To bound memory use, at most eight custom font/size pairs are attempted per session; reopening resets that budget.
 
-Portrait and landscape follow firmware orientation settings. inkWrite does not provide its own rotation or sensor controls.
+**Settings → Screen** or **Ctrl+Shift+S** toggles portrait and landscape. The choice is remembered for the next open; it applies only to inkWrite and does not change device settings.
 
 ## Files, saving and recovery
 
@@ -66,6 +68,8 @@ Wireless export is optional future work and is not required for manual retrieval
 | Ctrl+Left / Right | Move by word |
 | PageUp / PageDown | Move by page |
 | Ctrl+Shift+F | Toggle focus |
+| Ctrl+Shift+S | Rotate screen |
+| Left Alt+Shift | Next selected keyboard |
 | Ctrl+R | Full refresh |
 | Escape | More menu / return to writing |
 
