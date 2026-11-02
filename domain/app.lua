@@ -3,7 +3,7 @@ local Docs=require("domain.documents")
 local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
-local M={VERSION="0.1.45"}
+local M={VERSION="0.1.46"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 local prepare_frame
@@ -857,6 +857,11 @@ local function language_popup(ctx)
   ctx:invalidate()
 end
 local function language_pick(ctx,i)
+  if i==#A.enabled_ids+1 then
+    cancel_navigation();A.keyboard:reset();A.languages=nil;A.panel=nil;A.action_focus=nil
+    A.view="layouts";A.focus=1;A.typing_time=nil;ctx:invalidate();return
+  end
+  if not A.enabled_ids[i] then return end
   select_keyboard(ctx,A.enabled_ids[i])
   A.languages=nil;A.national_page=nil;A.virtual_focus=nil;A.typing_time=nil;ctx:invalidate()
 end
@@ -933,16 +938,41 @@ function M.input(ctx,ev)
   end
   if ev.type=="key" and ev.source=="keyboard" and A.view~="delete_confirm" then
     local code=ev.code;local mods=ev.mods or {};local down=ev.phase=="down"
-    if code=="AltLeft" then A.left_alt=ev.phase~="up" end
+    if code=="AltRight" then A.right_alt=ev.phase~="up" end
+    -- The modifier snapshot can identify Alt even if its separate down was
+    -- missed (for example when the keyboard reconnected while Alt was held).
     if ev.phase=="up" and (code=="ShiftLeft" or code=="ShiftRight" or code=="AltLeft") then A.layout_chord=nil end
-    if down and not mods.ctrl and not mods.meta and
-        ((code=="ShiftLeft" or code=="ShiftRight") and A.left_alt or code=="AltLeft" and mods.shift) then
+    if down and not mods.ctrl and not mods.meta and not A.right_alt and
+        ((code=="ShiftLeft" or code=="ShiftRight") and mods.alt or code=="AltLeft" and mods.shift) then
       if not A.layout_chord then A.layout_chord=true;cycle_keyboard(ctx) end
       return true
+    end
+    if code=="Space" and mods.ctrl and not mods.alt and not mods.meta and not mods.shift then
+      if down then cycle_keyboard(ctx) end;return true
     end
     if code=="KeyS" and mods.ctrl and mods.shift and not mods.alt and not mods.meta then
       if down then toggle_orientation(ctx) end;return true
     end
+  end
+  if A.languages then
+    if ev.type=="key" then
+      if (ev.key=="back" and ev.phase=="up") or (ev.code=="Escape" and ev.phase=="down") then A.languages=nil;ctx:invalidate()
+      elseif ev.phase=="down" then
+        if ev.key=="down" or ev.code=="ArrowDown" then A.language_focus=math.min(#A.enabled_ids+1,A.language_focus+1)
+        elseif ev.key=="up" or ev.code=="ArrowUp" then A.language_focus=math.max(1,A.language_focus-1)
+        elseif ev.key=="left" or ev.code=="ArrowLeft" or ev.code=="PageUp" then local _,per=language_geometry(ctx);A.language_focus=math.max(1,A.language_focus-per)
+        elseif ev.key=="right" or ev.code=="ArrowRight" or ev.code=="PageDown" then local _,per=language_geometry(ctx);A.language_focus=math.min(#A.enabled_ids+1,A.language_focus+per)
+        elseif ev.key=="ok" or ev.code=="Enter" then language_pick(ctx,A.language_focus) end
+        ctx:invalidate()
+      end
+    elseif ev.type=="pointer" and ev.phase=="up" then
+      local top,per,first=language_geometry(ctx);local row=(ev.y-top)//48+1
+      if ev.gesture=="tap" and ev.x>=20 and ev.x<ctx.screen.width-20 and row>=1 and row<=per and first+row-1<=#A.enabled_ids+1 then language_pick(ctx,first+row-1)
+      elseif ev.gesture=="tap" and row==per+1 and #A.enabled_ids+1>per then
+        A.language_focus=math.max(1,math.min(#A.enabled_ids+1,A.language_focus+(ev.x<ctx.screen.width//2 and -per or per)));ctx:invalidate()
+      else A.languages=nil;ctx:invalidate() end
+    end
+    return true
   end
   if A.virtual and A.view=="editor" and ev.type=="key" and ev.source~="keyboard" and ev.key~="back" then
     if ev.phase=="down" then
@@ -953,26 +983,6 @@ function M.input(ctx,ev)
       elseif ev.key=="up" then A.virtual_focus=math.max(1,A.virtual_focus-10)
       elseif ev.key=="ok" then virtual_press(ctx,keys[A.virtual_focus].label) end
       ctx:invalidate()
-    end
-    return true
-  end
-  if A.languages then
-    if ev.type=="key" then
-      if (ev.key=="back" and ev.phase=="up") or (ev.code=="Escape" and ev.phase=="down") then A.languages=nil;ctx:invalidate()
-      elseif ev.phase=="down" then
-        if ev.key=="down" or ev.code=="ArrowDown" then A.language_focus=math.min(#A.enabled_ids,A.language_focus+1)
-        elseif ev.key=="up" or ev.code=="ArrowUp" then A.language_focus=math.max(1,A.language_focus-1)
-        elseif ev.key=="left" or ev.code=="ArrowLeft" or ev.code=="PageUp" then local _,per=language_geometry(ctx);A.language_focus=math.max(1,A.language_focus-per)
-        elseif ev.key=="right" or ev.code=="ArrowRight" or ev.code=="PageDown" then local _,per=language_geometry(ctx);A.language_focus=math.min(#A.enabled_ids,A.language_focus+per)
-        elseif ev.key=="ok" or ev.code=="Enter" then language_pick(ctx,A.language_focus) end
-        ctx:invalidate()
-      end
-    elseif ev.type=="pointer" and ev.phase=="up" then
-      local top,per,first=language_geometry(ctx);local row=(ev.y-top)//48+1
-      if ev.gesture=="tap" and ev.x>=20 and ev.x<ctx.screen.width-20 and row>=1 and row<=per and A.enabled_ids[first+row-1] then language_pick(ctx,first+row-1)
-      elseif ev.gesture=="tap" and row==per+1 and #A.enabled_ids>per then
-        A.language_focus=math.max(1,math.min(#A.enabled_ids,A.language_focus+(ev.x<ctx.screen.width//2 and -per or per)));ctx:invalidate()
-      else A.languages=nil;ctx:invalidate() end
     end
     return true
   end
@@ -1170,7 +1180,7 @@ local function checkpoint_recovery(ctx)
   return false
 end
 function M.pause(ctx)
-  A.left_alt=nil;A.layout_chord=nil
+  A.right_alt=nil;A.layout_chord=nil
   extend_budget(ctx)
   if A.prepare_timer then A.prepare_timer:cancel();A.prepare_timer=nil end
   A.stats:pause(ctx)
@@ -1184,7 +1194,7 @@ function M.pause(ctx)
     if not checkpoint_recovery(ctx) then A.save_failed=true; A.message="Recovery write failed" end
   end
 end
-function M.resume(ctx) A.left_alt=nil;A.layout_chord=nil;A.stats:resume(ctx);ctx.input:listen({keyboard=true}); refresh_layout(ctx); ctx:invalidate() end
+function M.resume(ctx) A.right_alt=nil;A.layout_chord=nil;A.stats:resume(ctx);ctx.input:listen({keyboard=true}); refresh_layout(ctx); ctx:invalidate() end
 function M.leave(ctx)
   if A and A.prepare_timer then A.prepare_timer:cancel();A.prepare_timer=nil end
   if A and A.stats then A.stats:pause(ctx) end
@@ -1214,7 +1224,7 @@ end
 local function help_text(ctx)
   if A.view=="font_help" then return "Your type, your space\n\nPut .ttf files in the SD card fonts folder, then reopen inkWrite. Choose a font and size in Typography. System fonts are always available.\n\nCustom fonts use 20, 24, 28, 32 or 36 px. The actual line height comes from the font. Changes affect the editor, not your saved Markdown.\n\nTo protect memory, inkWrite tries at most eight custom font/size pairs per session. Unavailable fonts keep the previous choice. Save and reopen to reset the budget. Font coverage depends on the selected file."
   elseif A.view=="files_help" then return "Your writing lives on the SD card:\n\n"..(ctx.files and ctx.files.path or "/AppFiles/inkwrite").."\n\nSave first. Power down the device, remove the SD card, then copy the .md or .txt files using a card reader.\n\nOpen them in any text editor. No account or conversion needed.\n\nPrivate recovery is removed on uninstall; saved public files remain."
-  elseif A.view=="help" then return "Ctrl+S   Save\nCtrl+N   New document\nCtrl+O   Open file\nCtrl+J   Today journal\nCtrl+Z   Undo\nCtrl+Shift+Z   Redo\nCtrl+A   Select all\nCtrl+C / X / V   Copy / cut / paste\nCtrl+B / I   Bold / italic (.md)\nCtrl+Shift+F   Toggle focus\nCtrl+Shift+S   Rotate screen\nAlt+Shift   Next selected keyboard\nCtrl+R   Full screen refresh\n\nLeft / Right   Move character\nCtrl+Left / Right   Move word\nHome / End   Start / end of line\nCtrl+Home / End   Start / end of file\nPageUp / PageDown   Move page\nShift+movement   Select text\nEscape / Back   Return / menu\n\nTouch controls\nDouble-tap word   Select word\nTriple-tap word   Select sentence\nDouble-tap empty space   Focus\nSwipe up / down   Browse text\nLeft edge >   Shortcuts\nRight edge <   Statistics\nBottom edge up   Virtual keyboard\nKeyboard icon   Choose language\nWord count   Statistics\n\nType a letter before its accent.\nClipboard stays inside inkWrite."
+  elseif A.view=="help" then return "Ctrl+S   Save\nCtrl+N   New document\nCtrl+O   Open file\nCtrl+J   Today journal\nCtrl+Z   Undo\nCtrl+Shift+Z   Redo\nCtrl+A   Select all\nCtrl+C / X / V   Copy / cut / paste\nCtrl+B / I   Bold / italic (.md)\nCtrl+Shift+F   Toggle focus\nCtrl+Shift+S   Rotate screen\nAlt+Shift / Ctrl+Space   Next keyboard\nCtrl+R   Full screen refresh\n\nLeft / Right   Move character\nCtrl+Left / Right   Move word\nHome / End   Start / end of line\nCtrl+Home / End   Start / end of file\nPageUp / PageDown   Move page\nShift+movement   Select text\nEscape / Back   Return / menu\n\nTouch controls\nDouble-tap word   Select word\nTriple-tap word   Select sentence\nDouble-tap empty space   Focus\nSwipe up / down   Browse text\nLeft edge >   Shortcuts\nRight edge <   Statistics\nBottom edge up   Virtual keyboard\nKeyboard icon   Choose language\nWord count   Statistics\n\nType a letter before its accent.\nClipboard stays inside inkWrite."
   end
 end
 -- Layout is prepared in lifecycle/input/timer callbacks, never in draw.
@@ -1535,14 +1545,15 @@ function M.draw(ctx,g)
   end
   if A.languages and not A.close_modal then
     local top,per,first=language_geometry(ctx);local small=ctx.fonts.small or ui
-    local count=math.min(per,#A.enabled_ids-first+1)
-    g:rect(20,top,ctx.screen.width-40,(count+(#A.enabled_ids>per and 1 or 0))*48,{fill=true,color=0})
+    local total=#A.enabled_ids+1
+    local count=math.min(per,total-first+1)
+    g:rect(20,top,ctx.screen.width-40,(count+(total>per and 1 or 0))*48,{fill=true,color=0})
     for row=1,count do
       local i=first+row-1;local chosen=A.keyboard.id==A.enabled_ids[i]
       g:rect(20,top+(row-1)*48,ctx.screen.width-40,48,{fill=chosen,color=15,line_width=A.language_focus==i and 2 or 1})
-      g:text_box(32,top+(row-1)*48+2,ctx.screen.width-64,44,A.enabled_names[i],{font=small,valign="middle",overflow="ellipsis",color=chosen and 0 or 15})
+      g:text_box(32,top+(row-1)*48+2,ctx.screen.width-64,44,A.enabled_names[i] or "Add more...",{font=small,valign="middle",overflow="ellipsis",color=chosen and 0 or 15})
     end
-    if #A.enabled_ids>per then
+    if total>per then
       g:text(32,top+per*48+24,"< Prev",{font=small,valign="middle"})
       g:text(ctx.screen.width-32,top+per*48+24,"Next >",{font=small,align="right",valign="middle"})
     end

@@ -1,6 +1,6 @@
 # inkWrite
 
-A quiet writing and journaling app for Xteink X4Pro and X4Classic. Current development build: **0.1.45**. Requires compatible Gancao firmware with XTApp API 2.18 support.
+A quiet writing and journaling app for Xteink X4Pro and X4Classic. Current development build: **0.1.46**. Requires compatible Gancao firmware with XTApp API 2.18 support.
 
 ## Start writing
 
@@ -10,7 +10,7 @@ On Pro, open the on-screen keyboard through **Settings → Keyb. → On-screen k
 
 ## Languages and accents
 
-Choose your languages with checkboxes in **Settings → Keyb.** English (US) is the default; at least one layout must stay selected. Tap the status keyboard icon or language abbreviation to switch among selected layouts, or press **Left Alt+Shift**. The abbreviation shows the active layout, not Bluetooth connection status.
+Choose your languages with checkboxes in **Settings → Keyb.** English (US) is the default; at least one layout must stay selected. Tap the status keyboard icon or language abbreviation to switch among selected layouts, or press **Left Alt+Shift** or **Ctrl+Space**. Choose **Add more...** at the bottom of the popup to open Keyboard settings. Both shortcuts cycle only the checked layouts; select at least two to see a change. The abbreviation shows the active layout, not Bluetooth connection status.
 
 Available: English US, Czech and Slovak QWERTZ/QWERTY, German, French, Spanish, Italian, Portuguese Portugal/Brazil, Romanian Standard, Russian, Ukrainian, Hungarian, Vietnamese, Polish Programmers, Turkish Q, Dutch, Swedish, Danish, Norwegian, Finnish and Greek. All are left-to-right.
 
@@ -69,7 +69,7 @@ Wireless export is optional future work and is not required for manual retrieval
 | PageUp / PageDown | Move by page |
 | Ctrl+Shift+F | Toggle focus |
 | Ctrl+Shift+S | Rotate screen |
-| Left Alt+Shift | Next selected keyboard |
+| Left Alt+Shift / Ctrl+Space | Next selected keyboard |
 | Ctrl+R | Full refresh |
 | Escape | More menu / return to writing |
 

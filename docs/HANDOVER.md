@@ -1,3 +1,13 @@
+## Maintenance 0.1.46 — keyboard switching and popup settings
+
+The owner reports that Left Alt+Shift does not switch layouts on their physical keyboard; other 0.1.45 behavior is accepted. Previous code required a separately observed AltLeft down when Alt was pressed first. Shift down now uses ev.mods.alt directly, while explicit AltRight state protects AltGr+Shift. Either Shift key and either modifier order work; held/repeated keys do not cycle repeatedly. Ctrl+Space is an additional fallback. At least two checked layouts are required for a visible switch. The physical keyboard's actual missing/event behavior has not been captured, so hardware resolution remains to be checked.
+
+Added Add more... as the final language-popup row, opening the existing Keyboard settings page. Shared row counts include this action in drawing, touch, arrows, page navigation and Classic OK. It is reachable with one language and in landscape above the on-screen keyboard. Popup ownership now precedes Classic virtual-key navigation, so opening the popup over the virtual keyboard does not divert device keys to text. Document bytes, selection and virtual-keyboard visibility are preserved.
+
+Input contract: public-contract 2.x, contract/v2/spec-en/04-输入.md, Listening, line 253: code follows W3C physical key positions; ev.mods contains currently held modifier booleans; modifier keys have down/up events. Updated only the application event handling; no firmware/BT behavior is claimed.
+
+Verification: Fengari controller assertions: shortcut/popup plus national/orientation checks 5032, layout 44, typing/snapshot/autosave 3569, startup 24, timing 105 (8774 total). Cases include missing Alt down, both modifier orders/Shift sides, AltGr, repeated keys, Ctrl+Space, modal input ownership, text/selection retention and Add more by touch/keyboard/Classic in portrait/landscape with virtual keyboard shown/hidden. Native preview and final cloud/GitHub verification are recorded in the release artifact. No physical keyboard test was performed here.
+
 ## Keyboard settings and native rotation — 2026-11-02
 
 Loaded the latest original cloud save: 0.1.42, project bc6ebcee-26df-4d19-b814-b9e488605d51. The requested 1.0.42 is identified as 0.1.42 by both manifest and handover. Final version: 0.1.45; Studio cloud Save automatically advanced intermediate manifests to 0.1.43/0.1.44. Both version fields were aligned before the final save.
