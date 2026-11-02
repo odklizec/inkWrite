@@ -3,9 +3,15 @@ local Docs=require("domain.documents")
 local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
-local M={VERSION="0.1.46"}
+local M={VERSION="0.1.47"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
+local FONT_SIZES={20,24,28,30,32,36}
+local function preferred_font(ctx,px)
+  local f=ctx.fonts.size and ctx.fonts:size(px)
+  if f then return f end
+  return px<22 and ctx.fonts.small or px>=28 and ctx.fonts.large or ctx.fonts.medium
+end
 local prepare_frame
 local function extend_budget(ctx)
   if ctx.budget then ctx.budget:extend() end
@@ -21,7 +27,7 @@ local function selection()
   return math.min(a,p),math.max(a,p)
 end
 local function font(ctx)
-  return A.body_font or (A.large and ctx.fonts.large or ctx.fonts.medium)
+  return A.body_font or A.ui_medium or ctx.fonts.medium
 end
 local function geometry(ctx)
   local o=ctx.screen.occlusion or {left=0,right=0,top=0,bottom=0}
@@ -72,7 +78,7 @@ local function geometry(ctx)
     l.type_notice_y=base-60
     local half=(l.w-16)//2
     cs[1]={x=l.x,y=base+(horizontal and 20 or 0),w=horizontal and half or l.w,h=44,kind="font",label="Font: "..(A.font_name=="" and "System" or A.font_name)}
-    local sizes=A.font_name=="" and {24,30} or {20,24,28,32,36}
+    local sizes=FONT_SIZES
     local cell=(horizontal and half or l.w)//(#sizes+2)
     local sx=horizontal and l.x+half+16 or l.x;local sy=base+(horizontal and 20 or 80)
     cs[#cs+1]={x=sx,y=sy,w=cell,h=44,kind="size",delta=-1,label="A-"}
@@ -82,7 +88,7 @@ local function geometry(ctx)
     for group,values in ipairs({{4,8,14},{24,40,56}}) do
       for i,value in ipairs(values) do cs[#cs+1]={x=l.x+(group-1)*(half+16)+(i-1)*width,y=gy,w=width,h=44,kind=group==1 and "spacing" or "margin",value=value,label=({"S","M","L"})[i],selected=(group==1 and A.spacing or A.margin)==value} end
     end
-    cs[#cs+1]={x=horizontal and l.right-44 or l.x,y=horizontal and o.top+2 or base+226,w=horizontal and 44 or l.w,h=horizontal and 40 or 44,kind="help",label=horizontal and "?" or "About SD fonts"}
+    cs[#cs+1]={x=horizontal and l.right-44 or l.x,y=horizontal and o.top+2 or base+226,w=horizontal and 44 or l.w,h=horizontal and 40 or 44,kind="help",label=horizontal and "?" or "Font settings"}
     l.type_labels={{x=sx,y=sy-24,text="Text size"},{x=l.x,y=gy-24,text="Line spacing"},{x=l.x+half+16,y=gy-24,text="Margins"}}
   end
   return l
@@ -377,37 +383,19 @@ local function toggle_orientation(ctx)
   A.touch_geometry=nil;A.layout_revision=nil;A.languages=nil;A.panel=nil;A.action_focus=nil
 end
 local commands={"Back to writing","Save to SD card","New Markdown page","Open SD files","Typography","Where are my files?","Keyboard help","Memory & timing","Save and exit","Orientation: follow device","Focus: Ctrl+Shift+F","Today's journal: Ctrl+J","New plain text page","Keyboard layout"}
--- Native fonts live for the whole session. Keep successes AND failures so
--- neither drawing nor repeated selection can retry allocations indefinitely.
+-- Ask only for sizes. API 2.17+ selects the user's Ink App font.
 local function choose_font(ctx,name,px)
   extend_budget(ctx)
-  local f,e
-  if name=="" then px=px>=28 and 30 or 24 end
-  if name=="" then f=px>=28 and ctx.fonts.large or ctx.fonts.medium
-  elseif not (ctx.capabilities and ctx.capabilities.ttf and ctx.fonts.open) then e="Custom fonts unavailable; using system font"
-  else
-    local key=name..":"..px; local cached=A.font_cache[key]
-    if cached then f=cached.font;e=cached.error
-    elseif A.font_attempts>=8 then e="Font session limit; save and reopen to try more"
-    else
-      A.font_attempts=A.font_attempts+1
-      local ok,result,err=pcall(function() return ctx.fonts:open(name,px) end)
-      if ok then f=result;e=err else e="out_of_memory" end
-      A.font_cache[key]={font=f,error=e or (not f and "unavailable" or nil)}
-    end
-  end
-  if not f then
-    message(ctx,"Font unavailable: "..tostring(e)..". Previous font kept.")
-    return false
-  end
-  A.body_font=f;A.font_name=name;A.font_px=px;A.large=px>=28
-  ctx.state.font_name=name;ctx.state.font_px=px;ctx.state.large=A.large
+  local f=preferred_font(ctx,px)
+  A.body_font=f;A.font_name=f.px and (f.name or "Ink App font") or "System fallback"
+  A.font_px=px;A.large=px>=28
+  ctx.state.font_name=nil;ctx.state.font_px=px;ctx.state.large=A.large
   A.layout_revision=nil;A.touch_geometry=nil
   return true
 end
 local function typography_rows()
   return {"Back to writing","Font: "..(A.font_name=="" and "System" or A.font_name),
-    "Size: "..A.font_px.." px","Line spacing: +"..A.spacing.." px","Margins: "..A.margin.." px","About SD fonts"}
+    "Size: "..A.font_px.." px","Line spacing: +"..A.spacing.." px","Margins: "..A.margin.." px","Font settings"}
 end
 local function list_rows()
   if A.view=="menu" then return {commands[6],commands[7],commands[8],"Statistics"} end
@@ -421,25 +409,14 @@ local function list_rows()
   return A.files
 end
 local function font_picker(ctx)
-  A.font_names={"System"};A.message=nil
-  if ctx.capabilities and ctx.capabilities.ttf and ctx.fonts.installed then
-    local ok,names=pcall(function() return ctx.fonts:installed() end)
-    if ok and type(names)=="table" then
-      for i=1,math.min(64,#names) do
-        local n=names[i]
-        if type(n)=="string" and #n<=128 and utf8.len(n) then A.font_names[#A.font_names+1]=n end
-      end
-      if #names>64 then A.message="Showing the first 64 SD fonts" end
-    else A.message="Cannot read SD font list; system font available" end
-  else A.message="Custom fonts unavailable; system font available" end
-  A.view="fonts";A.focus=1
+  A.message=nil;A.view="font_help";A.help_page=1
 end
 local function typography_command(ctx,i)
   A.message=nil
   if i==1 then A.view="editor";refresh_layout(ctx)
   elseif i==2 then font_picker(ctx)
   elseif i==3 then
-    local sizes=A.font_name=="" and {24,30} or {20,24,28,32,36}
+    local sizes=FONT_SIZES
     local nextpx=sizes[1]
     for j,p in ipairs(sizes) do if p==A.font_px then nextpx=sizes[j%#sizes+1];break end end
     choose_font(ctx,A.font_name,nextpx)
@@ -453,7 +430,7 @@ local function type_control(ctx,c)
   if c.kind=="font" then font_picker(ctx)
   elseif c.kind=="help" then A.view="font_help";A.help_page=1
   elseif c.kind=="size" then
-    local sizes=A.font_name=="" and {24,30} or {20,24,28,32,36}
+    local sizes=FONT_SIZES
     local value=c.value
     if not value then
       local index=1;for i,n in ipairs(sizes) do if n==A.font_px then index=i end end
@@ -545,13 +522,13 @@ function M.load(ctx)
     local ok=ctx.screen:set_orientation(orientation)
     if not ok then ctx.state.screen_orientation=nil end
   end
-  A.font_cache={};A.font_attempts=0;A.font_name="";A.font_px=A.large and 30 or 24
+  A.ui_small=preferred_font(ctx,20);A.ui_medium=preferred_font(ctx,24);A.ui_large=preferred_font(ctx,30)
+  A.font_name="";A.font_px=A.large and 30 or 24
   A.spacing=(ctx.state.spacing==4 or ctx.state.spacing==14) and ctx.state.spacing or 8
   A.margin=(ctx.state.margin==40 or ctx.state.margin==56) and ctx.state.margin or 24
-  local name=ctx.state.font_name;local px=ctx.state.font_px
-  if type(name)=="string" and #name<=128 and utf8.len(name) and (px==20 or px==24 or px==28 or px==30 or px==32 or px==36) then
-    choose_font(ctx,name,px)
-  end
+  local px=ctx.state.font_px
+  if px==20 or px==24 or px==28 or px==30 or px==32 or px==36 then A.font_px=px end
+  choose_font(ctx,"",A.font_px)
   A.buffer=assert(Buffer.new()); A.doc={name="untitled-001.md",base=nil}
   if not ctx.files or not ctx.input.listen then A.blocked=true; A.message="Update to Gancao firmware supporting XTApp API 2.11"; return end
   local listened,e=ctx.input:listen({keyboard=true})
@@ -1031,7 +1008,7 @@ function M.input(ctx,ev)
       else A.text_tap=nil end
     end
     if ev.phase=="up" and ev.gesture=="tap" then
-      local ui=ctx.fonts.small or ctx.fonts.medium
+      local ui=A.ui_small
       local left=math.max(l.chrome_left,l.chrome_right-math.max(80,ui:measure(tostring(A.buffer.words))+36))
       if ev.x>=left and ev.x<=l.chrome_right and ev.y>=status_y-20 and ev.y<status_y+20 then
         A.text_tap=nil;command(ctx,15);return true
@@ -1222,7 +1199,7 @@ local function pager(g,ui,l,page,pages)
   end
 end
 local function help_text(ctx)
-  if A.view=="font_help" then return "Your type, your space\n\nPut .ttf files in the SD card fonts folder, then reopen inkWrite. Choose a font and size in Typography. System fonts are always available.\n\nCustom fonts use 20, 24, 28, 32 or 36 px. The actual line height comes from the font. Changes affect the editor, not your saved Markdown.\n\nTo protect memory, inkWrite tries at most eight custom font/size pairs per session. Unavailable fonts keep the previous choice. Save and reopen to reset the budget. Font coverage depends on the selected file."
+  if A.view=="font_help" then return "Your Ink App font\n\nChoose the font in Ink App > Settings > Font. Then close and reopen inkWrite to start a new font session.\n\ninkWrite follows that choice for writing and controls. This page shows the font actually returned by the device.\n\nPut .ttf files in the SD card fonts folder. If the chosen font is unavailable or cannot open, the device may use the reader font or a built-in fallback.\n\nSize, line spacing and margins remain in inkWrite Typography. They change appearance only; saved document bytes are unchanged."
   elseif A.view=="files_help" then return "Your writing lives on the SD card:\n\n"..(ctx.files and ctx.files.path or "/AppFiles/inkwrite").."\n\nSave first. Power down the device, remove the SD card, then copy the .md or .txt files using a card reader.\n\nOpen them in any text editor. No account or conversion needed.\n\nPrivate recovery is removed on uninstall; saved public files remain."
   elseif A.view=="help" then return "Ctrl+S   Save\nCtrl+N   New document\nCtrl+O   Open file\nCtrl+J   Today journal\nCtrl+Z   Undo\nCtrl+Shift+Z   Redo\nCtrl+A   Select all\nCtrl+C / X / V   Copy / cut / paste\nCtrl+B / I   Bold / italic (.md)\nCtrl+Shift+F   Toggle focus\nCtrl+Shift+S   Rotate screen\nAlt+Shift / Ctrl+Space   Next keyboard\nCtrl+R   Full screen refresh\n\nLeft / Right   Move character\nCtrl+Left / Right   Move word\nHome / End   Start / end of line\nCtrl+Home / End   Start / end of file\nPageUp / PageDown   Move page\nShift+movement   Select text\nEscape / Back   Return / menu\n\nTouch controls\nDouble-tap word   Select word\nTriple-tap word   Select sentence\nDouble-tap empty space   Focus\nSwipe up / down   Browse text\nLeft edge >   Shortcuts\nRight edge <   Statistics\nBottom edge up   Virtual keyboard\nKeyboard icon   Choose language\nWord count   Statistics\n\nType a letter before its accent.\nClipboard stays inside inkWrite."
   end
@@ -1231,7 +1208,7 @@ end
 prepare_frame=function(ctx)
   if not A or not A.buffer then return end
   local started=now(ctx)
-  local l=geometry(ctx);local f=font(ctx);local ui=ctx.fonts.medium
+  local l=geometry(ctx);local f=font(ctx);local ui=A.ui_medium
   if A.view=="editor" then
     if A.layout_revision~=A.buffer.revision or A.layout_pos~=A.buffer.pos or A.layout_width~=l.w or A.layout_count~=l.count or A.layout_font~=f or A.layout_top~=A.top then refresh_layout(ctx) end
   elseif A.view=="typography" then
@@ -1351,14 +1328,14 @@ local function icon(g,name,x,y,f)
   end
 end
 local function editor_chrome(ctx,g,l)
-  local ui=ctx.fonts.small or ctx.fonts.medium
+  local ui=A.ui_small
   local top=(ctx.screen.occlusion or {}).top or 0
   local focused=A.focus_mode and A.view=="editor"
   local y=top+(focused and 20 or 50)
   local code=Keyboard.code(A.keyboard.id)
   if not focused then
     local titles={menu="More",library="Open file",typography="Typography",fonts="Fonts",layouts="Keyboard",font_help="Fonts",orientation_help="Screen rotate",files_help="SD files",help="Shortcuts",delete_confirm="Delete file?",statistics="Statistics"}
-    box(g,ctx.fonts.medium,l.chrome_left,top+5,l.chrome_right-l.chrome_left-(A.view=="menu" and 120 or A.view=="editor" and 44 or 0),30,titles[A.view] or A.doc.name)
+    box(g,A.ui_medium,l.chrome_left,top+2,l.chrome_right-l.chrome_left-(A.view=="menu" and 120 or A.view=="editor" and 44 or 0),36,titles[A.view] or A.doc.name)
     if A.view=="menu" then g:text(l.chrome_right,top+20,M.VERSION,{font=ui,align="right",valign="middle"}) end
     if A.view=="editor" then local x=l.chrome_right-22;g:line(x-7,top+13,x+7,top+27);g:line(x+7,top+13,x-7,top+27) end
     g:line(l.chrome_left,l.header,l.chrome_right,l.header)
@@ -1393,13 +1370,13 @@ local function editor_chrome(ctx,g,l)
         icon(g,labels[i-4],cx-10,r.y+5)
         local label=({"Focus","Screen","Type","Keyb.","More"})[i-4]
         g:text(cx,r.y+43,label,{font=ui,align="center",valign="middle"})
-      else g:text(r.x+12,r.y+26,labels[i-4],{font=ctx.fonts.medium,valign="middle"}) end
+      else g:text(r.x+12,r.y+26,labels[i-4],{font=A.ui_medium,valign="middle"}) end
     end
   end
 end
 function M.draw(ctx,g)
   if not A then return end
-  local l=geometry(ctx); local f=font(ctx); local ui=ctx.fonts.medium
+  local l=geometry(ctx); local f=font(ctx); local ui=A.ui_medium
   g:clear(0)
   if not frame_ready(l,f) then
     -- Geometry can change without an input event. Queue one preparation and
@@ -1435,7 +1412,7 @@ function M.draw(ctx,g)
     position_line(ctx,g,l,p)
     editor_chrome(ctx,g,l)
   elseif A.view=="statistics" then
-    local small=ctx.fonts.small or ui;local mode=A.stats_mode or 1
+    local small=A.ui_small;local mode=A.stats_mode or 1
     for i,label in ipairs({"Week","Month","Year"}) do
       local x=l.x+(i-1)*l.w//3;local w=l.w//3
       g:rect(x,l.body,w-3,44,{fill=i==mode,radius=3})
@@ -1463,7 +1440,7 @@ function M.draw(ctx,g)
     else box(g,small,l.x,l.body+64,l.w,100,e) end
     pager(g,small,l,1,1)
   elseif A.view=="typography" then
-    local small=ctx.fonts.small or ui
+    local small=A.ui_small
     local p=l.preview
     local cache=A.preview_cache
     for i,row in ipairs(cache.rows) do g:text(p.x,p.y+(i-1)*l.step,row.text,{font=f}) end
@@ -1484,7 +1461,7 @@ function M.draw(ctx,g)
       local label=type(rows[i])=="table" and rows[i].name or rows[i]
       
       if A.view=="library" then
-        local rename,delete,size=file_cells(ctx,l,rows[i]);local small=ctx.fonts.small or ui
+        local rename,delete,size=file_cells(ctx,l,rows[i]);local small=A.ui_small
         box(g,small,l.x,y+10,math.max(1,size-l.x-90),24,label)
         icon(g,"rename",rename+11,y+10);icon(g,"delete",delete+11,y+10)
         g:text(size,y+22,file_size(rows[i].size),{font=small,align="right",valign="middle"})
@@ -1493,12 +1470,12 @@ function M.draw(ctx,g)
         local checked=ctx.state.keyboard_enabled[Keyboard.ids[i-1]]==true
         g:rect(l.x,y+10,22,22,{radius=2})
         if checked then g:line(l.x+4,y+21,l.x+9,y+27);g:line(l.x+9,y+27,l.x+19,y+14) end
-        box(g,ui,l.x+34,y+8,l.w-34,30,label)
-      else box(g,ui,l.x,y+8,l.w,30,label) end
+        box(g,A.ui_small,l.x+34,y+4,l.w-34,36,label)
+      else box(g,A.ui_small,l.x,y+4,l.w,36,label) end
     end
     if A.view=="menu" and A.memory_sample then
       local y=l.body+#rows*l.row+16
-      box(g,ctx.fonts.small or ui,l.x,y,l.w,math.max(0,l.dock-y-8),A.memory_sample)
+      box(g,A.ui_small,l.x,y,l.w,math.max(0,l.dock-y-8),A.memory_sample)
     end
     pager(g,ui,l,((A.focus-1)//per)+1,math.max(1,(#rows+per-1)//per))
   elseif A.view=="delete_confirm" then
@@ -1522,7 +1499,7 @@ function M.draw(ctx,g)
       if ctx.device and ctx.device.model=="x4_classic" then for j=0,3 do rr(5+j*7,52,4,3) end else rr(15,52,6,4) end
       g:text(cx,l.body+112,label,{font=ui,align="center"})
     end
-    box(g,ctx.fonts.small or ui,l.x,l.body+170,l.w,60,"Rotation follows device settings.")
+    box(g,A.ui_small,l.x,l.body+170,l.w,60,"Rotation follows device settings.")
     pager(g,ui,l,1,1)
   elseif A.view=="files_help" then
     help_view(ctx,g,ui,l)
@@ -1536,15 +1513,15 @@ function M.draw(ctx,g)
   if A.message then box(g,ui,l.x,l.foot+40,l.w,54,A.message) end
   end
   if A.virtual and A.view=="editor" and not A.close_modal then
-    local keys,top=virtual_keys(ctx);local small=ctx.fonts.small or ui
+    local keys,top=virtual_keys(ctx);local small=A.ui_small
     g:rect(0,top,ctx.screen.width,ctx.screen.height-top,{fill=true,color=0})
     for i,r in ipairs(keys) do
       g:rect(r.x+1,r.y+2,r.w-2,r.h-4,{radius=3,line_width=A.virtual_focus==i and 2 or 1})
-      g:text_box(r.x+2,r.y+3,r.w-4,r.h-6,r.label=="Shift" and "Aa" or r.label=="Enter" and "Ent" or r.label=="More" and ">" or r.label,{font=small,align="center",valign="middle",overflow="ellipsis"})
+      g:text_box(r.x+2,r.y+3,r.w-4,r.h-6,r.label=="Shift" and "Aa" or r.label=="Enter" and "Ent" or r.label=="More" and ">" or r.label=="—" and "--" or r.label=="…" and "..." or r.label,{font=small,align="center",valign="middle",overflow="ellipsis"})
     end
   end
   if A.languages and not A.close_modal then
-    local top,per,first=language_geometry(ctx);local small=ctx.fonts.small or ui
+    local top,per,first=language_geometry(ctx);local small=A.ui_small
     local total=#A.enabled_ids+1
     local count=math.min(per,total-first+1)
     g:rect(20,top,ctx.screen.width-40,(count+(total>per and 1 or 0))*48,{fill=true,color=0})
@@ -1559,7 +1536,7 @@ function M.draw(ctx,g)
     end
   end
   if A.close_modal then
-    local r=close_rect(ctx);local modal=A.close_modal;local small=ctx.fonts.small or ui
+    local r=close_rect(ctx);local modal=A.close_modal;local small=A.ui_small
     g:rect(r.x,r.y,r.w,r.h,{fill=true,color=0,radius=8});g:rect(r.x,r.y,r.w,r.h,{radius=8,line_width=2})
     g:text(r.x+r.w//2,r.y+28,"Close inkWrite?",{font=ui,align="center",valign="middle"})
     g:text_box(r.x+12,r.y+58,r.w-24,56,modal.dirty and "Save changes before closing?" or A.blocked and "Files are unchanged." or "No unsaved changes.",{font=small,align="center",wrap="word",overflow="ellipsis"})

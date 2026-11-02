@@ -1,6 +1,6 @@
 # inkWrite
 
-A quiet writing and journaling app for Xteink X4Pro and X4Classic. Current development build: **0.1.46**. Requires compatible Gancao firmware with XTApp API 2.18 support.
+A quiet writing and journaling app for Xteink X4Pro and X4Classic. Current development build: **0.1.47**. Requires compatible Gancao firmware with XTApp API 2.18 support.
 
 ## Start writing
 
@@ -28,9 +28,9 @@ Fast taps use the firmware's native double-tap event and captured touch timestam
 
 ## Typography and orientation
 
-Settings → Type offers font selection, size, line spacing and margins. A sample of up to five lines previews changes; controls stay anchored above the bottom bar. Fewer sample lines appear when space is constrained. Typography changes appearance only, not saved file contents.
+Settings → Type shows the actual font in use and offers size, line spacing and margins. A sample of up to five lines previews changes; controls stay anchored above the bottom bar. Fewer sample lines appear when space is constrained. Typography changes appearance only, not saved file contents.
 
-Place `.ttf` fonts in the SD card's fonts folder and reopen the app. System sizes are 24/30 px; custom sizes are 20/24/28/32/36 px. Glyph coverage depends on the font. To bound memory use, at most eight custom font/size pairs are attempted per session; reopening resets that budget.
+Choose your font in **Ink App → Settings → Font**, then close and reopen inkWrite. Place `.ttf` files in the SD card fonts folder if needed. inkWrite requests the chosen font for writing and controls using the current host API; the actual returned font name appears in Typography. The size choices are 20/24/28/30/32/36 px. If the host cannot use the selected file, it may return the reader font or a built-in fallback; the latter is shown as **System fallback**. Glyph coverage depends on the font. The host owns font memory and caching; inkWrite uses six size choices and opens sizes outside drawing.
 
 **Settings → Screen** or **Ctrl+Shift+S** toggles portrait and landscape. The choice is remembered for the next open; it applies only to inkWrite and does not change device settings.
 
@@ -116,3 +116,6 @@ Swipe right starting within 32 pixels of the left screen edge to open the paged 
 The first typing frame after idle is prepared immediately. Further keystrokes share a 30 ms grouping window; an unchanged window requests no extra refresh. More → Memory & timing shows session maximum app input, queue, layout, drawing and save durations. Input-to-draw ends when the app has drawn the frame; it excludes Bluetooth transmission and the screen refresh. These numbers are diagnostic measurements, not a promise of screen response speed.
 
 
+
+
+The English virtual keyboard labels its em-dash and ellipsis keys as `--` and `...` for readability. They still insert the Unicode characters `—` and `…`.
