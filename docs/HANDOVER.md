@@ -1,3 +1,17 @@
+## 1.0.3 — restore filenames in Open file
+
+The Open file list placed filenames in a 24 px text box even when the preferred
+20 px font returned a taller line height. The host could fit zero lines, leaving
+size/action controls visible but no filename. Labels now get row height minus
+8 px; library row height is at least the returned UI line height plus 8 px.
+Shared geometry keeps pagination and touch rows aligned, with size/actions
+centered in taller rows. No filename/document-byte transformation or extra font
+opens. New controller regression: 464 assertions for 24/28/36/44 px line heights,
+portrait/landscape, short/long/accented names, touch/keyboard opening and exact
+UTF-8/CRLF preservation without public writes. The four older statistics-double
+failures remain recorded; this fix does not claim they pass. Final native/cloud
+and GitHub evidence is recorded in the delivery artifact after verification.
+
 ## 2026-11-12 — correct Studio snapshot source boundaries
 
 The initial phase 0 cloud snapshot was saved with probe/test Lua as executable

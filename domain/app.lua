@@ -3,7 +3,7 @@ local Docs=require("domain.documents")
 local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
-local M={VERSION="1.0.2"}
+local M={VERSION="1.0.3"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 -- Typing pacing. None of these shorten the panel's own frame time; they keep
@@ -69,6 +69,7 @@ local function geometry(ctx)
   l.text_bottom=l.foot-12
   l.step=font(ctx).line_height+A.spacing; l.count=math.max(1,(l.text_bottom-l.body)//l.step)
   l.row=44
+  if A.view=="library" then l.row=math.max(l.row,A.ui_small.line_height+8) end
   l.list_bottom=l.foot-8; l.per=math.max(1,(l.list_bottom-l.body)//l.row)
   l.key=table.concat({l.x,l.y,l.w,l.body,l.foot,l.step},":")
   if A.view=="editor" and not A.focus_mode then
@@ -1637,10 +1638,13 @@ function M.draw(ctx,g)
       
       if A.view=="library" then
         local rename,delete,size=file_cells(ctx,l,rows[i]);local small=A.ui_small
-        box(g,small,l.x,y+10,math.max(1,size-l.x-90),24,label)
-        icon(g,"rename",rename+11,y+10);icon(g,"delete",delete+11,y+10)
-        g:text(size,y+22,file_size(rows[i].size),{font=small,align="right",valign="middle"})
-        if i==A.focus and (A.file_action or 1)>1 then local x=A.file_action==2 and rename or delete;g:rect(x,y,44,44,{radius=3,line_width=2}) end
+        -- Preferred 20 px fonts can have a line height greater than 24 px.
+        -- Keep at least one full line in the label box; geometry also drives taps.
+        box(g,small,l.x,y+4,math.max(1,size-l.x-90),l.row-8,label)
+        local icon_y=y+(l.row-24)//2
+        icon(g,"rename",rename+11,icon_y);icon(g,"delete",delete+11,icon_y)
+        g:text(size,y+l.row//2,file_size(rows[i].size),{font=small,align="right",valign="middle"})
+        if i==A.focus and (A.file_action or 1)>1 then local x=A.file_action==2 and rename or delete;g:rect(x,y+(l.row-44)//2,44,44,{radius=3,line_width=2}) end
       elseif A.view=="layouts" and i>1 then
         local checked=ctx.state.keyboard_enabled[Keyboard.ids[i-1]]==true
         g:rect(l.x,y+10,22,22,{radius=2})

@@ -8,10 +8,10 @@ GitHub document synchronization is under phase 0 investigation. The editor
 remains local-only. See the [API/storage audit](docs/GITHUB-SYNC-AUDIT.md),
 [proposed transport/auth decision](docs/ADR-0001-GITHUB-SYNC-TRANSPORT-AUTH.md)
 and [separate synthetic HTTPS probe](tools/github-sync-probe/README.md).
-The loaded cloud source has inconsistent version labels (manifest 1.0.1,
-runtime 1.0.2, older README 0.1.51); these are recorded rather than bumped.
+The original cloud baseline's inconsistent version labels are recorded in the
+audit. Current manifest and runtime version are 1.0.3.
 
-A quiet writing and journaling app for Xteink X4Pro and X4Classic. Current development build: **0.1.51**. Requires compatible Gancao firmware with XTApp API 2.18 support.
+A quiet writing and journaling app for Xteink X4Pro and X4Classic. Current development build: **1.0.3**. Requires compatible Gancao firmware with XTApp API 2.18 support.
 
 ## Start writing
 
