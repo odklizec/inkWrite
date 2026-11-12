@@ -1,3 +1,20 @@
+## 1.0.5 — GitHub sync phase 1 (inactive core, 2026-11-12)
+
+Owner accepted filename fix and authorized the next phase. Added pure sync
+state/decisions, scoped schema-1 metadata with checksum/revision/readback guards,
+bounded Contents payload conversion, fake transport/fixtures and failure tests.
+No editor hook, transport, credentials, public-document overwrite or auth decision.
+All sync modules remain text references in the Studio export until integration.
+Repository modules keep their original paths. See GITHUB-SYNC-PHASE1.md.
+
+Repaired four statistics test doubles (`saved=0`) and updated the snapshot test
+to the current cloud controller's 120-second forced save with a pre-boundary
+assertion. Existing runtime save logic unchanged. All 12 suites pass, 14,256
+assertions (176 sync/safety). Studio Save automatically advanced 1.0.3 to 1.0.4;
+the follow-up 1.0.5 aligns manifest/runtime. Only runtime version string changes.
+Cloud-save identity/version and GitHub commit are in the phase 1 delivery artifact.
+Physical-device sync/network remains NOT TESTED. Phase 2 is the auth/transport gate.
+
 ## 1.0.3 — restore filenames in Open file
 
 The Open file list placed filenames in a 24 px text box even when the preferred

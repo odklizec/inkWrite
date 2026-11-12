@@ -34,3 +34,8 @@ The four previously recorded cloud-baseline desktop mock failures are separate
 from these Studio diagnostics. Packaging them as references does not assert
 they pass. Native preview and final cloud-save evidence are recorded in the
 delivery verification artifact after performing those checks.
+
+Phase 1 adds inactive pure sync modules and tests. These also map to development
+text references; the seven-file editor runtime remains unchanged. The four old
+statistics mocks and the stale 30-second autosave test were repaired separately
+in phase 1; see GITHUB-SYNC-PHASE1.md for the scope and final verification.

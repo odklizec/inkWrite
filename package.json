@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "test": "node tests/run.cjs",
-    "test:probe": "node tests/run.cjs --probe"
+    "test:probe": "node tests/run.cjs --probe",
+    "test:sync": "node tests/run.cjs --sync"
   },
   "devDependencies": {"fengari": "0.1.5"}
 }

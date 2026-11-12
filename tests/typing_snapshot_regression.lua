@@ -3,7 +3,7 @@ local function check(v,msg)n=n+1;assert(v,msg)end
 local drawing=false
 local Layout=require('domain.layout');local rows=Layout.rows
 Layout.rows=function(...)assert(not drawing,'layout during draw');return rows(...)end
-package.loaded['domain.stats']={new=function()return setmetatable({},{__index=function()return function()end end})end}
+package.loaded['domain.stats']={new=function()return setmetatable({saved=0},{__index=function()return function()end end})end}
 local ctx={state={last='test.md'},time=0,screen={width=480,height=800,occlusion={left=0,right=0,top=0,bottom=0}},fonts={},input={listen=function()return true end},clock={},budget={extend=function()assert(not drawing)end}}
 local files={['test.md']='hello ž world\nsecond line'};local private={};local writes=0;local timers={}
 ctx.clock.millis=function()return ctx.time end;ctx.clock.now=function()return {valid=false}end
@@ -34,18 +34,19 @@ advance(ctx.time+80);draw();check(A.prepared.revision==A.buffer.revision,'contin
 key('KeyA','a');draw();key('KeyA','a');draw();local p=A.buffer.pos
 App.input(ctx,{type='pointer',phase='up',gesture='tap',x=40,y=90});check(A.buffer.pos==p,'stale tap cannot move caret')
 key('KeyA','a');draw();check(A.prepare_timer==nil,'notice geometry prepares before drawing even during burst')
--- Boundary times: 5 idle seconds; continuously dirty no longer than 30 s.
+-- Current cloud policy: 5 idle seconds; continuously dirty at most 120 s.
 ctx.time=10000;key('KeyS',nil,{ctrl=true});local base=writes
 ctx.time=11000;key('KeyZ','z');advance(11080)
 ctx.time=15999;App.tick(ctx);check(writes==base,'no save before 5 idle seconds')
 ctx.time=16000;App.tick(ctx);check(writes==base+1 and not A.dirty,'save at 5 seconds')
 ctx.time=20000;key('KeyA','a');local start=writes
-for t=21000,49000,1000 do ctx.time=t;key('KeyA','a');App.tick(ctx);check(writes==start,'no early continuous save')end
-ctx.time=50000;key('KeyA','a');App.tick(ctx);check(writes==start+1,'continuous save at 30 seconds')
-ctx.time=51000;key('KeyA','a');ctx.fail_write=true;ctx.time=56000;App.tick(ctx);check(A.dirty and A.save_failed,'failure keeps dirty state')
-ctx.fail_write=false;ctx.time=57000;App.tick(ctx);check(A.dirty,'failed autosave does not retry by itself')
+for t=21000,139000,1000 do ctx.time=t;key('KeyA','a');App.tick(ctx);check(writes==start,'no early continuous save')end
+ctx.time=139999;key('KeyA','a');App.tick(ctx);check(writes==start,'no forced save before 120 seconds')
+ctx.time=140000;key('KeyA','a');App.tick(ctx);check(writes==start+1,'continuous save at 120 seconds')
+ctx.time=141000;key('KeyA','a');ctx.fail_write=true;ctx.time=146000;App.tick(ctx);check(A.dirty and A.save_failed,'failure keeps dirty state')
+ctx.fail_write=false;ctx.time=147000;App.tick(ctx);check(A.dirty,'failed autosave does not retry by itself')
 key('KeyS',nil,{ctrl=true});check(not A.dirty and files['test.md']==A.buffer:text(),'explicit save immediate and exact')
-ctx.time=58000;key('KeyA','a');App.pause(ctx);check(private['recovery.txt']:sub(-#A.buffer:text())==A.buffer:text(),'pause keeps newest recovery')
+ctx.time=148000;key('KeyA','a');App.pause(ctx);check(private['recovery.txt']:sub(-#A.buffer:text())==A.buffer:text(),'pause keeps newest recovery')
 App.resume(ctx);draw()
 -- Geometry recovery remains separate from pending edits.
 ctx.screen.width=800;ctx.screen.height=480;drawing=true;App.draw(ctx,g);drawing=false

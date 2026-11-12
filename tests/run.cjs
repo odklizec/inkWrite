@@ -1,11 +1,12 @@
-// Every suite gets a fresh Lua VM. Existing regression files are unmodified.
+// Every suite gets a fresh Lua VM; native codecs/hash are test-only injections.
 const fs=require('node:fs');
 const path=require('node:path');
 const {lua,lauxlib,lualib,to_luastring,to_jsstring}=require(process.env.INKWRITE_FENGARI || 'fengari');
 const root=path.resolve(__dirname,'..');
 const probeDir=path.join(root,'tools/github-sync-probe');
-const suites=process.argv.includes('--probe')?[]:fs.readdirSync(__dirname).filter(n=>n.endsWith('.lua')).sort().map(n=>'tests/'+n);
-suites.push('tools/github-sync-probe/test.lua');
+const onlySync=process.argv.includes('--sync');
+const suites=process.argv.includes('--probe')?[]:fs.readdirSync(__dirname).filter(n=>n.endsWith('.lua')&&(!onlySync||n.startsWith('sync_'))).sort().map(n=>'tests/'+n);
+if(!onlySync)suites.push('tools/github-sync-probe/test.lua');
 let failures=0,total=0;
 for(const suite of suites) {
   const L=lauxlib.luaL_newstate();lualib.luaL_openlibs(L);
@@ -14,9 +15,14 @@ for(const suite of suites) {
     if(lauxlib.luaL_dostring(L,to_luastring(source)))throw Error(to_jsstring(lua.lua_tostring(L,-1)));
   }
   try {
+    require('./support/native.cjs')(L,{lua,to_luastring,to_jsstring});
     const modules=['keyboard',...fs.readdirSync(path.join(root,'domain')).filter(n=>n.endsWith('.lua')).map(n=>'domain.'+n.slice(0,-4))];
     for(const name of modules)execute(`package.preload[${JSON.stringify(name)}]=function(...)\n${fs.readFileSync(path.join(root,name.replaceAll('.','/')+'.lua'),'utf8')}\nend`);
     execute(`package.preload.probe=function(...)\n${fs.readFileSync(path.join(probeDir,'probe.lua'),'utf8')}\nend`);
+    for(const folder of ['support','fixtures'])for(const file of fs.readdirSync(path.join(__dirname,folder)).filter(n=>n.endsWith('.lua'))) {
+      const name='tests.'+folder+'.'+file.slice(0,-4);
+      execute(`package.preload[${JSON.stringify(name)}]=function(...)\n${fs.readFileSync(path.join(__dirname,folder,file),'utf8')}\nend`);
+    }
     // Compile the standalone entry too; it must not run inside the editor tests.
     const status=lauxlib.luaL_loadstring(L,to_luastring(fs.readFileSync(path.join(probeDir,'index.lua'),'utf8')));
     if(status)throw Error(to_jsstring(lua.lua_tostring(L,-1)));

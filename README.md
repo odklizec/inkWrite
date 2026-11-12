@@ -4,8 +4,9 @@ For Studio imports use the corrected exporter described in
 [Studio project layout](docs/STUDIO-PROJECT-LAYOUT.md). Desktop tests and the
 separate diagnostic are stored there as text references, avoiding mixed app roots.
 
-GitHub document synchronization is under phase 0 investigation. The editor
-remains local-only. See the [API/storage audit](docs/GITHUB-SYNC-AUDIT.md),
+GitHub document synchronization has a [phase 1 pure core](docs/GITHUB-SYNC-PHASE1.md)
+with conflict decisions, validated metadata and mock/failure tests. It is not yet
+connected to the editor; writing remains local-only. See the [API/storage audit](docs/GITHUB-SYNC-AUDIT.md),
 [proposed transport/auth decision](docs/ADR-0001-GITHUB-SYNC-TRANSPORT-AUTH.md)
 and [separate synthetic HTTPS probe](tools/github-sync-probe/README.md).
 The original cloud baseline's inconsistent version labels are recorded in the

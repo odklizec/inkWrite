@@ -3,7 +3,7 @@ local function check(v,msg)n=n+1;assert(v,msg)end
 local drawing=false
 local Layout=require('domain.layout');local rows=Layout.rows
 Layout.rows=function(...)assert(not drawing,'layout during draw');return rows(...)end
-package.loaded['domain.stats']={new=function()return setmetatable({},{__index=function()return function()end end})end}
+package.loaded['domain.stats']={new=function()return setmetatable({saved=0},{__index=function()return function()end end})end}
 local ctx={state={last='test.md'},time=0,screen={width=480,height=800,occlusion={left=0,right=0,top=0,bottom=0}},fonts={},input={listen=function()return true end},clock={},budget={extend=function()assert(not drawing)end}}
 local files={['test.md']='hello ž world\nsecond line'};local private={};local writes=0;local timers={}
 ctx.clock.millis=function()return ctx.time end;ctx.clock.now=function()return {valid=false}end
