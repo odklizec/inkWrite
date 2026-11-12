@@ -1,3 +1,19 @@
+## 1.0.6 — Phase 2 Direct GitHub, live acceptance pending
+
+Owner chose Direct GitHub/RAM-only sessions; App not set up. Added sync_auth.lua
+with device flow, bounded polling/expiry, scope checks, fixed API routes and
+credential-free status; read/write adapters use Phase 1 payload validation. Every
+operation rechecks account/App/private-repository/branch scope; revoked grants
+clear session. Pause/disconnect cancels and discards access/refresh material.
+No editor import, net permission, save hook, local import or actual credentials.
+Added GitHub setup guide and accepted the ADR's architecture choice. JSON tests
+now model host null with a sentinel. Tests/delivery counts are in the final
+artifact. Real HTTPS/auth/hardware acceptance waits for the registered App.
+Desktop: 15/15 suites pass, 14,423 assertions; auth suite 109, six sync/safety
+suites 343. Development snapshot version 1.0.6 matches the next Studio save;
+the only editor-runtime change is the version string. Sync code remains inactive
+as development text references in Studio. The original released project is untouched.
+
 ## Phase 2 preparation — no runtime release
 
 Added inactive bounded HTTPS and host hash/base64 adapters, with two mock suites.

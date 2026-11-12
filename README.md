@@ -9,8 +9,9 @@ with conflict decisions, validated metadata and mock/failure tests. It is not ye
 connected to the editor; writing remains local-only. See the [API/storage audit](docs/GITHUB-SYNC-AUDIT.md),
 [proposed transport/auth decision](docs/ADR-0001-GITHUB-SYNC-TRANSPORT-AUTH.md)
 and [separate synthetic HTTPS probe](tools/github-sync-probe/README.md).
-The [Phase 2 transport preparation](docs/GITHUB-SYNC-PHASE2.md) adds bounded HTTPS
-and host encoding adapters; auth choice/setup and real-network verification remain pending.
+The [Phase 2 Direct GitHub implementation](docs/GITHUB-SYNC-PHASE2.md) adds bounded
+transport and memory-only device authorization. Follow [GitHub App setup](docs/GITHUB-APP-SETUP.md)
+before live tests; App setup, real-network verification and editor integration remain pending.
 The original cloud baseline's inconsistent version labels are recorded in the
 audit. Current manifest and runtime version are 1.0.3.
 

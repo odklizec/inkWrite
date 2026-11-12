@@ -1,75 +1,79 @@
-# Phase 2 — transport preparation (not complete)
+# Phase 2 — Direct GitHub implementation, live acceptance pending
 
-The owner requested the next step after Phase 1. The architecture and public App
-setup questions are pending; no Direct GitHub or Worker choice is inferred from
-the supplied plan. Phase 2 acceptance has **not** been met.
+The owner explicitly chose Direct GitHub with memory-only sessions and confirmed
+the GitHub App is not set up. Auth/transport code and mock tests are implemented;
+Phase 2 acceptance remains incomplete until registration and real HTTPS/auth tests.
+No Worker, real token, client secret, private key or App registration was created.
 
-Implemented independently of that decision:
+## Code
 
-- `domain/sync_transport.lua`: one asynchronous request at a time, bound to one
-  explicit HTTPS origin; 15-second deadline; 64 KiB request / 48 KiB application
-  response ceiling; strict method/header/input checks; cancellation/generation
-  guards. No redirects, automatic retries, file targets or logs. Incomplete,
-  truncated, oversized and malformed responses fail closed. Error bodies and
-  raw exceptions are removed; only fixed errors/status and bounded Retry-After
-  information escape. JSON parsing extends the callback budget and occurs in the
-  completion callback, never draw. A cancellation can leave the host busy while
-  it aborts; the adapter returns that result rather than retrying tightly.
-- `domain/sync_primitives.lua`: inject the actual host SHA-256/raw-digest-to-hex
-  and base64 methods into Phase 1. Bound inputs/outputs, validate the 32-byte raw
-  digest and lowercase hex, contain host exceptions, and refuse weak fallbacks.
-- Two mock suites cover transport/encoding limits, byte preservation, stale and
-  duplicate callbacks, cancellation, TLS/network-style failures, rate limiting,
-  redirects, exceptions, malformed data and missing primitives.
+- `domain/sync_transport.lua`: one request, bound HTTPS origin, 15-second deadline,
+  64 KiB request / 48 KiB application response ceiling, strict inputs, cancellation
+  and generation guards, redacted errors, no redirects/retries/file targets/logs.
+- `domain/sync_primitives.lua`: real host SHA-256 → lowercase hex and base64 bridge,
+  bounded inputs/results, raw 32-byte digest check and no weak fallbacks.
+- `domain/sync_auth.lua`: device-code POST and interval-controlled polling, pending/
+  slow-down/denied/expired handling, conservative expiring RAM-only token, public
+  status without credentials, disconnect/pause cancellation and stale-callback
+  guards. Exact GitHub origins/routes and fixed Accept/API-version/User-Agent
+  headers; form bodies keep authorization material out of URLs. Refresh tokens
+  are discarded. No secret getter, persistent state/storage or management secret.
 
-These modules are not imported by the editor. They do not grant network access,
-store credentials, create a GitHub App or issue real document requests. The
-transport is a low-level adapter: the future auth/API layer must provide its
-fixed route allowlist, repository/account authorization checks and fixed headers.
-An origin binding alone is not repository authorization.
+Auth checks `/user`, `/user/installations`, the installation's accessible repo
+set and the selected branch. It refuses wrong account/App/repository/branch,
+suspended installs, all-repository access, extra installations/repos/permissions,
+public/internal/archived/disabled repos and missing write access. It pins user and
+repository numeric IDs during the session. Optional requested repository narrowing
+is verified rather than trusted. Null suspension is the real `ctx.json.null`.
+IDs must fit the host's signed 32-bit integer range; fail closed otherwise.
 
-## Evidence
+`read` and `write` only accept validated document basenames under `documents/`,
+encode UTF-8 URL segments and branch, and revalidate scope before each operation.
+Read returns bounded validated bytes; write returns only a validated blob-SHA/
+fingerprint receipt. Caller must use Phase 1 decisions/revision guards before
+acting or checkpointing. These methods do not themselves implement a sync UI,
+safe local import, recovery write or metadata commit. Races return conflicts;
+uncertain remote writes must be reconciled by re-fetch before retrying.
 
-Desktop: **14/14 suites, 14,314 assertions, zero failures**, Fengari 0.1.5.
-New suites contribute 58 assertions; all five sync/safety suites total 234.
-`npm test` runs all suites; `npm run test:sync` selects sync/safety suites.
-`git diff --check` passed. Synthetic mocks do not establish real firmware HTTPS,
-memory headroom or device timing. The host can retain up to 128 KiB before the
-48 KiB application check; no lower host allocation limit is promised.
+An operation's 401/403 authorization failure clears the session. 429/403 rate
+limits do not get mistaken for revocation; there is no automatic retry. A failed
+access recheck fails closed and clears the grant, including network failures;
+reconnect explicitly. An uncertain document request can retain the unexpired
+session but never returns a successful checkpoint. Local editor data is untouched.
 
-Contract reviewed 2026-11-12 via public-contract search: XTApp 2.x sections
-14 (networking), 10 (JSON), 26 (encoding/hashes). JSON null is the host's explicit
-`ctx.json.null`, not Lua nil; future auth response validation must account for it.
+All methods run outside draw. Future controller must call `poll` from a timer/tick
+and `pause` on lifecycle suspension; no timer is installed implicitly. The editor
+does not import these modules yet. No network permission or save hook was added.
 
-## Pending decisions and setup
+## Verification and limits
 
-Recommended route remains Direct GitHub App device flow, expiring RAM-only token,
-no refresh-token persistence, reauthorize after session end, GitHub-side revocation.
-The alternative Worker adds hosting, operator trust and session infrastructure.
-See ADR-0001-GITHUB-SYNC-TRANSPORT-AUTH.md; no service has been deployed.
+Auth tests use real JSON/base64/SHA-256 through test-only Node bindings and fake
+HTTPS. `ctx.json.null` now has a sentinel in the test binding, matching the host.
+Tests cover success and exact byte requests, interval/slow-down/deadlines, wrap,
+wrong/broad/revoked grants, changed privacy, malformed tokens, fixed destinations,
+scope checks, late callbacks, cancellation and credential-free status/state.
+Desktop result: **15/15 suites, 14,423 assertions, zero failures**; auth suite
+109, six sync/safety suites 343. Run `npm test` or `npm run test:sync` with
+Fengari 0.1.5. `git diff --check` passed. Development snapshot 1.0.6 aligns the
+manifest/runtime with the next cloud save; only the editor version string changes.
+The Studio exporter preserves all inactive modules/tests as text references with
+a restore map; the repository/full-source archive keeps their original paths.
 
-For Direct GitHub, implementation needs the public client ID, numeric App ID,
-expected GitHub login and a separate private documents repository/branch. No
-client secret or access token should be supplied in chat/source. Registration,
-installation and granting access are distinct from implementing this adapter.
-Those security-sensitive setup actions have not been performed.
+The host can allocate up to 128 KiB before the 48 KiB application check. Heap and
+callback timing require real-device measurement. Private storage is not treated
+as encrypted storage. RAM release is not guaranteed memory zeroization. Direct
+tokens are repository-scoped; client path checks do not narrow a stolen token.
+Scope/privacy changes racing after preflight remain a GitHub policy boundary.
 
-Current official GitHub documentation was rechecked:
+Current contract evidence: public XTApp 2.x sections 14 (network), 10 (JSON),
+26 (hash/encoding), 12 (monotonic wrap); API 2.18. GitHub REST version 2026-03-10.
+Current official device-flow, registration and installation-access docs were read;
+links and concrete public setup steps are in GITHUB-APP-SETUP.md.
 
-- [GitHub App device flow](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app):
-  public client ID, device polling/slow-down/expiry; optional repository narrowing
-  can be ignored for an inaccessible ID. Initial response is not proof of scope.
-- [Installation access endpoints](https://docs.github.com/en/rest/apps/installations):
-  verify the token's accessible installation and repository set. Do not infer
-  authorization from a requested repo or account name.
+## Next step
 
-Still required: approved auth flow, disconnect/revoke guidance, account/repository
-checks, expiry handling, real HTTPS compatibility and invalid/revoked credential
-tests. There is no Phase 2 completion or new device installation claim.
-
-## Delivery state
-
-Development source is on the existing feature branch. Cloud remains the verified
-**1.0.5 Phase 1** snapshot until authentication decisions/setup allow Phase 2 to
-be completed. Runtime/manifest version and editor behavior are unchanged. Studio
-exports continue mapping these inactive modules/tests to development references.
+Follow [GitHub App setup](GITHUB-APP-SETUP.md). Send only public client ID, App ID,
+expected login and the separate private docs repo/branch. Then configure and test
+real HTTPS/authentication. Live revoked-token behavior, physical devices, network
+compatibility, power loss and memory/timing remain **NOT TESTED**. No production
+sync or Phase 2 completion is claimed; Phase 3 supplies the editor's manual UI.

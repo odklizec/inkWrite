@@ -1,7 +1,15 @@
 # ADR 0001: GitHub sync transport and per-user authorization
 
-Date: 2026-11-12. Status: **proposed; awaiting feasibility review and owner
-decision**. This ADR does not authorize hosting, app registration or credentials.
+Date: 2026-11-12. Status: **Direct GitHub with memory-only sessions approved by
+the owner; live feasibility acceptance pending**. The owner confirmed the choice
+and that App setup is not yet done. No hosting or credentials were created.
+
+Decision: implement GitHub App device flow with expiring RAM-only access tokens,
+discard refresh tokens, reauthorize after session end and revoke through GitHub
+settings. Require one selected installation/repository with Contents write and
+Metadata read only, expected account and private repo/branch verification. The
+token still has repository-level scope; the client restricts paths. No encrypted
+storage or path-scoped server enforcement is claimed. See GITHUB-APP-SETUP.md.
 
 ## Context
 
@@ -46,9 +54,10 @@ storage remains unavailable, prefer RAM-only sessions even with a Worker; any
 persisted bearer credential needs narrowly scoped permissions, short lifetime,
 revocation and explicit user consent.
 
-No final architecture is chosen in phase 0: Gate A is incomplete, current cloud
-regressions are not green, and the material tradeoffs have not been reviewed.
-The pure phase 1 core should remain independent of either transport.
+Phase 0 left the choice open. Phase 1 repaired the stale test doubles and passed
+all regressions. The owner's subsequent explicit choice resolves Gate B for this
+RAM-only prototype; Gate A's real-device/network evidence remains incomplete.
+The pure Phase 1 core remains independent of transport.
 
 ## Implementation notes for a later approved adapter
 

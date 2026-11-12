@@ -1,0 +1,252 @@
+-- Direct GitHub App device flow. Secrets live only in this closure, never state/SD.
+local Transport=require('domain.sync_transport')
+local Sync=require('domain.sync')
+local Payload=require('domain.github_payload')
+local M={API_VERSION='2026-03-10',VERIFY_URL='https://github.com/login/device'}
+local int=Transport.integer
+local function login_ok(v)return type(v)=='string'and #v>0 and #v<=39 and not v:find('[^A-Za-z0-9-]')end
+local function encode(s)return (s:gsub('[^A-Za-z0-9_.~-]',function(c)return string.format('%%%02X',c:byte())end))end
+local function age(t,start)return (t-start)&0x7fffffff end
+local function clock(ctx)
+  local value=Transport.call(ctx.clock,'millis')
+  if int(value,0,2147483647)then return value end
+end
+local function only_one(items)
+  if type(items)~='table'or type(items[1])~='table'then return nil end
+  for k in pairs(items)do if k~=1 then return nil end end
+  return items[1]
+end
+local function config_ok(c)
+  return Sync.fields(c,{client_id=true,app_id=true,login=true,scope=true,repository_id=true})
+    and type(c.client_id)=='string'and #c.client_id>=8 and #c.client_id<=64
+    and not c.client_id:find('[^A-Za-z0-9_.-]')and int(c.app_id,1,2147483647)
+    and login_ok(c.login)and Sync.scope_ok(c.scope)
+    and (c.repository_id==nil or int(c.repository_id,1,2147483647))
+end
+function M.new(config,primitives)
+  if not config_ok(config)then return nil,'setup_required'end
+  if type(primitives)~='table'or type(primitives.hash)~='function'or type(primitives.codec)~='table'then return nil,'primitives_unavailable'end
+  -- Copy public setup: mutating caller tables cannot retarget a live session.
+  local client_id,app_id,expected_login=config.client_id,config.app_id,config.login
+  local scope={repo=config.scope.repo,branch=config.scope.branch}
+  local narrowed_id=config.repository_id
+  local owner,repo=scope.repo:match('^([^/]+)/(.+)$')
+  local prefix='/repos/'..encode(owner)..'/'..encode(repo)
+  local oauth=assert(Transport.new('https://github.com'))
+  local api=assert(Transport.new('https://api.github.com'))
+  local generation,busy=0,false
+  local state,reason='disconnected',nil
+  local token,token_start,token_ms,device_code,user_code,code_start,code_ms,last_poll,interval
+  local verified,account_id,repository_id=false,nil,nil
+  local s={}
+  local function stop(next_state,why)
+    generation=generation+1;oauth:cancel();api:cancel();busy=false
+    token=nil;token_start=nil;token_ms=nil;device_code=nil;user_code=nil
+    code_start=nil;code_ms=nil;last_poll=nil;interval=nil;verified=false
+    account_id=nil;repository_id=nil;state=next_state;reason=why
+  end
+  local function valid_token(ctx)
+    if not token then return false end
+    local now=clock(ctx)
+    if not now or age(now,token_start)>=token_ms then stop('auth_required','session_expired');return false end
+    return true
+  end
+  local function failure(err)
+    local next_state=(err=='no_network'or err=='timeout'or err=='io_error')and 'offline'
+      or (err=='authorization_required'and 'auth_required'or 'error')
+    stop(next_state,err)
+  end
+  local function response_error(res)
+    if res.err then return res.err end
+    if res.status==401 or res.status==403 then return 'authorization_required'end
+    if res.status==409 or res.status==422 then return 'remote_race'end
+    return 'request_failed'
+  end
+  local function headers(auth)
+    local h={Accept='application/vnd.github+json',['X-GitHub-Api-Version']=M.API_VERSION,['User-Agent']='inkWrite'}
+    if auth then h.Authorization='Bearer '..token end
+    return h
+  end
+  local function send(ctx,transport,request,fn)
+    local id=generation
+    local ok,err=transport:request(ctx,request,function(c,res)
+      if generation==id then fn(c,res)end
+    end)
+    if not ok and generation==id then fn(ctx,{err=err})end
+  end
+  local function get(ctx,path,fn)
+    if not valid_token(ctx)then fn(ctx,{err='session_expired'});return end
+    send(ctx,api,{path=path,method='GET',headers=headers(true),response_limit=16384},fn)
+  end
+  local function validate_access(ctx,done)
+    get(ctx,'/user',function(c,r)
+      local u=r.data
+      if r.err or r.status~=200 then done(c,nil,response_error(r));return end
+      if type(u)~='table'or not login_ok(u.login)or u.login:lower()~=expected_login:lower()
+        or not int(u.id,1,2147483647)or (account_id and u.id~=account_id)then done(c,nil,'account_mismatch');return end
+      local user_id=u.id
+      get(c,'/user/installations?per_page=2&page=1',function(c2,r2)
+        if r2.err or r2.status~=200 then done(c2,nil,response_error(r2));return end
+        local data=r2.data;local installation=type(data)=='table'and only_one(data.installations)
+        local null=c2.json.null
+        if not installation or data.total_count~=1 or installation.app_id~=app_id
+          or not int(installation.id,1,2147483647)or installation.repository_selection~='selected'
+          or null==nil or installation.suspended_at~=null or type(installation.account)~='table'
+          or type(installation.account.login)~='string'or installation.account.login:lower()~=owner:lower()
+          or not Sync.fields(installation.permissions,{contents=true,metadata=true})
+          or installation.permissions.contents~='write'or installation.permissions.metadata~='read'then
+          done(c2,nil,'installation_scope_mismatch');return
+        end
+        get(c2,'/user/installations/'..string.format('%d',installation.id)..'/repositories?per_page=2&page=1',function(c3,r3)
+          if r3.err or r3.status~=200 then done(c3,nil,response_error(r3));return end
+          local list=r3.data;local repository=type(list)=='table'and only_one(list.repositories)
+          if not repository or list.total_count~=1 or type(repository.full_name)~='string'
+            or repository.full_name:lower()~=scope.repo:lower()or not int(repository.id,1,2147483647)
+            or (narrowed_id and repository.id~=narrowed_id)or (repository_id and repository.id~=repository_id)
+            or repository.private~=true
+            or type(repository.permissions)~='table'or repository.permissions.push~=true then
+            done(c3,nil,'repository_scope_mismatch');return
+          end
+          local repo_id=repository.id
+          -- The installation list uses a smaller repository representation.
+          -- Fetch full metadata rather than assume optional detail fields exist.
+          get(c3,prefix,function(c4,r4)
+            if r4.err or r4.status~=200 then done(c4,nil,response_error(r4));return end
+            local details=r4.data
+            if type(details)~='table'or details.id~=repo_id or type(details.full_name)~='string'
+              or details.full_name:lower()~=scope.repo:lower()or details.private~=true
+              or details.visibility~='private'or details.archived~=false or details.disabled~=false then
+              done(c4,nil,'repository_scope_mismatch');return
+            end
+            get(c4,prefix..'/branches/'..encode(scope.branch),function(c5,r5)
+              if r5.err or r5.status~=200 then done(c5,nil,response_error(r5));return end
+              local branch=r5.data
+              if type(branch)~='table'or branch.name~=scope.branch or type(branch.commit)~='table'
+                or not Sync.hex_ok(branch.commit.sha,40)then done(c5,nil,'branch_mismatch');return end
+              if not valid_token(c5)then done(c5,nil,'session_expired');return end
+              account_id=user_id;repository_id=repo_id;verified=true
+              done(c5,true)
+            end)
+          end)
+        end)
+      end)
+    end)
+  end
+  function s:disconnect()stop('disconnected',nil)end
+  s.pause=s.disconnect;s.cancel=s.disconnect
+  function s:status(ctx)
+    if token then valid_token(ctx)end
+    if device_code then
+      local now=clock(ctx)
+      if not now or age(now,code_start)>=code_ms then stop('auth_required','code_expired')end
+    end
+    return {state=state,reason=reason,busy=busy,connected=verified and token~=nil,
+      login=verified and expected_login or nil,repo=scope.repo,branch=scope.branch,
+      user_code=user_code,verification_uri=user_code and M.VERIFY_URL or nil}
+  end
+  function s:start(ctx)
+    if busy then return nil,'busy'end
+    if token then return nil,'disconnect_first'end
+    stop('requesting_code',nil);local now=clock(ctx)
+    if not now then failure('clock_unavailable');return nil,'clock_unavailable'end
+    busy=true;code_start=now
+    send(ctx,oauth,{path='/login/device/code',method='POST',response_limit=4096,
+      headers={Accept='application/json',['Content-Type']='application/x-www-form-urlencoded',['User-Agent']='inkWrite'},
+      body='client_id='..encode(client_id)},function(c,res)
+        busy=false
+        if res.err or res.status~=200 then failure(response_error(res));return end
+        local d=res.data
+        if type(d)~='table'or type(d.device_code)~='string'or #d.device_code~=40 or d.device_code:find('[^A-Za-z0-9]')
+          or type(d.user_code)~='string'or not d.user_code:match('^[A-Z0-9][A-Z0-9][A-Z0-9][A-Z0-9]%-[A-Z0-9][A-Z0-9][A-Z0-9][A-Z0-9]$')
+          or d.verification_uri~=M.VERIFY_URL or not int(d.expires_in,1,900)or not int(d.interval,5,180)then failure('invalid_device_response');return end
+        local current=clock(c)
+        if not current or age(current,code_start)>=d.expires_in*1000 then failure('code_expired');return end
+        device_code=d.device_code;user_code=d.user_code;code_ms=d.expires_in*1000
+        interval=d.interval*1000;last_poll=current;state='authorizing'
+      end)
+    return true
+  end
+  function s:poll(ctx)
+    if busy then return nil,'busy'end
+    if not device_code then return nil,'not_authorizing'end
+    local now=clock(ctx)
+    if not now or age(now,code_start)>=code_ms then failure('code_expired');return nil,'code_expired'end
+    if age(now,last_poll)<interval then return nil,'wait_interval'end
+    busy=true;last_poll=now
+    local body='client_id='..encode(client_id)..'&device_code='..encode(device_code)
+      ..'&grant_type='..encode('urn:ietf:params:oauth:grant-type:device_code')
+    if narrowed_id then body=body..'&repository_id='..string.format('%d',narrowed_id)end
+    send(ctx,oauth,{path='/login/oauth/access_token',method='POST',response_limit=4096,
+      headers={Accept='application/json',['Content-Type']='application/x-www-form-urlencoded',['User-Agent']='inkWrite'},body=body},function(c,res)
+        busy=false
+        local current=clock(c)
+        if not current or age(current,code_start)>=code_ms then failure('code_expired');return end
+        if res.err or res.status~=200 then failure(response_error(res));return end
+        local d=res.data
+        if d.error=='authorization_pending'and d.access_token==nil then last_poll=current;return end
+        if d.error=='slow_down'and d.access_token==nil then
+          local seconds=math.max(interval//1000+5,int(d.interval,5,180)and d.interval or 0)
+          if seconds>180 then failure('poll_interval_exceeded');return end
+          interval=seconds*1000;last_poll=current;return
+        end
+        if d.error~=nil then
+          local errors={access_denied=true,expired_token=true,token_expired=true,device_flow_disabled=true,incorrect_client_credentials=true}
+          failure(errors[d.error]and d.error or 'authorization_failed');return
+        end
+        if type(d.access_token)~='string'or #d.access_token>255 or not d.access_token:match('^ghu_[A-Za-z0-9]+$')
+          or d.token_type~='bearer'or d.scope~=''or not int(d.expires_in,61,28800)then failure('invalid_token_response');return end
+        token=d.access_token;token_start=now;token_ms=(d.expires_in-60)*1000
+        -- Never retain refresh_token or expose the access token in public status.
+        d.access_token=nil;d.refresh_token=nil;device_code=nil;user_code=nil;code_start=nil
+        state='verifying';busy=true
+        validate_access(c,function(_,ok,err)
+          busy=false;if not ok then failure(err);return end
+          state='connected';reason=nil
+        end)
+      end)
+    return true
+  end
+  local function operation(ctx,name,done,write,bytes,sha)
+    if type(done)~='function'or not Sync.name_ok(name)then return nil,'invalid_argument'end
+    if busy then return nil,'busy'end
+    if not verified or not valid_token(ctx)then return nil,'authorization_required'end
+    if write and (not Sync.text_ok(bytes)or (sha~=nil and not Sync.hex_ok(sha,40)))then return nil,'invalid_document'end
+    busy=true;state='verifying';reason=nil
+    validate_access(ctx,function(c,ok,err)
+      if not ok then failure(err);done(c,nil,err);return end
+      local path='documents/'..name
+      local route=prefix..'/contents/documents/'..encode(name)
+      local req={path=route..'?ref='..encode(scope.branch),method='GET',headers=headers(true),response_limit=49152}
+      local fingerprint
+      if write then
+        Transport.call(c.budget,'extend')
+        fingerprint=Sync.digest(primitives.hash,bytes)
+        local data=Payload.write_request(scope,path,bytes,sha,primitives.codec)
+        local body=data and Transport.call(c.json,'encode',data.body)
+        if not fingerprint or type(body)~='string'or #body>65536 then failure('encode_failed');done(c,nil,'encode_failed');return end
+        req.path=route;req.method='PUT';req.body=body;req.headers['Content-Type']='application/json'
+      end
+      state=write and 'uploading'or 'downloading'
+      send(c,api,req,function(c2,res)
+        busy=false
+        if not valid_token(c2)then done(c2,nil,'session_expired');return end
+        if res.err or (res.status~=200 and res.status~=201 and not (not write and res.status==404))then
+          local why=response_error(res)
+          if res.status==401 or (res.status==403 and res.err~='rate_limited')then failure(why)
+          else state=(why=='timeout'or why=='no_network'or why=='io_error')and 'offline'or 'error';reason=why end
+          done(c2,nil,why);return
+        end
+        local result,why
+        if write then result,why=Payload.written(res.status,res.data,path,fingerprint)
+        else result,why=Payload.read(res.status,res.data,path,primitives.codec)end
+        state=result and 'connected'or 'error';reason=why
+        done(c2,result,why)
+      end)
+    end)
+    return true
+  end
+  function s:read(ctx,name,done)return operation(ctx,name,done,false)end
+  function s:write(ctx,name,bytes,sha,done)return operation(ctx,name,done,true,bytes,sha)end
+  return s
+end
+return M
