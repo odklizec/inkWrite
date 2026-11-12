@@ -18,7 +18,7 @@ local FONT_SIZES={20,24,28,30,32,36}
 local function preferred_font(ctx,px)
   local f=ctx.fonts.size and ctx.fonts:size(px)
   if f then return f end
-  return px<22 and ctx.fonts.small or px>=28 and ctx.fonts.large or ctx.fonts.medium
+  return px>=28 and ctx.fonts.large or ctx.fonts.medium
 end
 local prepare_frame
 local function extend_budget(ctx)

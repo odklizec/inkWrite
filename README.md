@@ -1,5 +1,9 @@
 # inkWrite
 
+For Studio imports use the corrected exporter described in
+[Studio project layout](docs/STUDIO-PROJECT-LAYOUT.md). Desktop tests and the
+separate diagnostic are stored there as text references, avoiding mixed app roots.
+
 GitHub document synchronization is under phase 0 investigation. The editor
 remains local-only. See the [API/storage audit](docs/GITHUB-SYNC-AUDIT.md),
 [proposed transport/auth decision](docs/ADR-0001-GITHUB-SYNC-TRANSPORT-AUTH.md)

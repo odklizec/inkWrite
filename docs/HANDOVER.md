@@ -1,3 +1,15 @@
+## 2026-11-12 — correct Studio snapshot source boundaries
+
+The initial phase 0 cloud snapshot was saved with probe/test Lua as executable
+editor modules, causing the reported missing-module, missing-net-permission and
+test-double API diagnostics. Corrected exporter keeps only the seven editor Lua
+files executable; supporting source is preserved under docs/development/ as text
+with a restore map. The probe remains a separate app. No net permission is added
+to inkWrite. Removed ctx.fonts.small emergency fallback in favor of medium/large;
+preferred fonts still use fonts:size. See STUDIO-PROJECT-LAYOUT.md and the
+post-repair delivery verification for actual Studio/cloud results. This does not
+resolve or hide the separately recorded desktop regression failures.
+
 ## 2026-11-12 — GitHub sync phase 0 (no editor integration)
 
 Explicitly opened the latest original cloud inkWrite (project
