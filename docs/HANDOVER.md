@@ -77,6 +77,141 @@ unverified; desktop regressions cannot establish e-ink latency.
 
 # inkWrite handover
 
+## Maintenance 0.1.51 — Markdown source shortcuts (no rendering)
+
+Owner asked whether inkWrite really supports Markdown, and chose the cheap path
+now with a preview toggle possibly later.
+
+Answer recorded plainly: inkWrite writes and edits Markdown *source*. It does
+not render it. Headings are not enlarged, `**bold**` is not bold, list and
+quote markers stay visible, and there is no preview mode. The only formatting
+help before this version was Ctrl+B / Ctrl+I, which wrap the selection in
+`**` or `*` and refuse in .txt files.
+
+Added this turn (marker insertion only; no layout or drawing change):
+
+| Key | Effect |
+| --- | --- |
+| Ctrl+1..Ctrl+6 | Set that heading level on every selected line |
+| Ctrl+0 | Remove the heading marker |
+| Ctrl+L | Toggle `- ` bullet |
+| Ctrl+Quote | Toggle `> ` quote |
+| Ctrl+K | Link: wraps selection as `[text]()`, unwraps an existing link, or inserts `[]()` with the caret inside the brackets |
+
+Behaviour:
+
+- All of them are editor-only and .md-only; .txt gives the existing "Markdown
+  formatting is available in .md files" message (now shared by
+  markdown_doc/markdown_action).
+- Heading and marker commands apply to every line the selection touches and
+  replace the block in one buffer call, so byte offsets stay valid and undo
+  records a single step.
+- Set-heading replaces an existing level rather than stacking (`## ` -> `# `),
+  toggles off when the level already matches, and leaves `#hashtag` alone
+  because a heading needs a space after the hashes.
+- Two scoping bugs were caught and fixed during the work: markdown_action was
+  first declared before markdown_doc (nil capture at definition time), and the
+  first caret heuristic used a tail offset; markers now records the caret's line
+  and column, then re-applies it after the marker shift.
+
+Verification: the 16-case transformation suite (heading add/toggle/replace,
+hashtag non-heading, empty line, quote and bullet toggles, caret before/after
+shift on line 1 and line 2 of a multi-line block) passed. Native preview booted
+with an .md document and drew plain source. Ctrl combinations cannot be sent
+through run_project, so the key path itself was checked by reading the code.
+
+Still not supported on purpose: on-screen rendering, hidden markers, and
+rendered preview. That is the later, expensive piece.
+
+## Maintenance 0.1.50 — counters show last / average / worst
+
+Owner corrected the 0.1.49 reading: draw was 76 ms, not 763. So nothing
+regressed; input 13, layout 10, draw 76, key to prepare 30 are all at or better
+than 0.1.47. Key to drawn (1100 ms) is dominated by the panel: a frame takes
+about 650 ms and a request during a refresh merges into the next one, so honest
+values are 650-1300 ms. The 28 ms reading in 0.1.47 was one lucky sample taken
+as a draw finished, which is why a max-only counter misled twice.
+
+Change: timing() now keeps last, count and sum as well as max, and the page
+prints "last/avg/worst" per counter. Six metrics no longer fit the More menu's
+box (about 126 px in landscape), so Memory & timing became its own view
+("timing") with a full page; the menu item still opens it and Back/pager
+returns. Text is capped at ten lines so the landscape page does not clip.
+
+Save went 140 -> 183 ms: that is the SD card, not the app; the write is outside
+the keystroke path either way.
+
+## Maintenance 0.1.49 — the 250 ms window was a regression; revert it
+
+Owner measured the 0.1.48 diagnostics on the device:
+
+| Counter | 0.1.47 | 0.1.48 |
+| --- | --- | --- |
+| input | 15 | 9 |
+| layout | 9 | 4 |
+| draw | 77 | 68 |
+| queue | 30 | 303 |
+| save | 140 | 132 |
+| input-to-draw | 28 | 1049 |
+
+Conclusion: three of the four 0.1.48 changes helped; the fourth caused a clear
+regression. `queue` is measured from the queued keystroke to preparation, so it
+rising 30 → 303 ms is almost exactly the added 250 ms coalescing window, and
+input-to-draw 28 → 1049 ms is that window plus the wait for a full refresh.
+
+Cause: on this platform a frame requested while a refresh is in progress is
+merged into the next frame anyway (contract section 5). A coalescing window
+cannot therefore make anything appear sooner; it can only hold the newest text
+back past the frame that was already coming. The 30 ms window is a work-saving
+grouping for keys pressed within a few milliseconds, not a pace setter.
+
+Fix: COALESCE_MS back to 30. Left alone: the SD-write gating (save fell 140 →
+132 min and the gesture no longer sits in a keystroke), the single statistics
+update per edit (input 15 → 9 ms), and the longer full-refresh deferral. That
+last one is bounded by FULL_REFRESH_HOLD=25000 so a marathon session still gets
+ghosting cleared.
+
+Diagnostics wording: the labels now say "key to prepare" and "key to drawn",
+and state that key to drawn includes the screen refresh. `queue` is the app-side
+part that can be tuned; `key to drawn` is dominated by the panel.
+
+Not verified: the device numbers above are the owner's; this turn's Studio
+run was a boot/smoke check in both orientations, and no desktop harness run was
+made here. Physical Bluetooth transport remains unmeasured by the app.
+
+## Maintenance 0.1.48 — keep SD writes out of the typing path
+
+Owner asked what else can make the device respond faster while typing on the
+Bluetooth keyboard. The panel sets the floor: one presented frame is about
+650 ms, and a frame requested during a refresh merges into the next one. The
+app's own input, layout and draw callbacks were already small (owner-reported
+maxima 16/12/10 ms); the reported outliers were queue 197 ms and save 203 ms,
+both SD writes. Four app-side changes, none of which shortens the panel time:
+
+1. The statistics checkpoint is no longer written from a key callback. An edit
+   only marks the minute checkpoint as due; `on_tick` writes it once the keyboard
+   has been quiet for 700 ms, or unconditionally when 180 s have passed since the
+   last checkpoint. Pause/exit and opening Statistics still flush immediately.
+2. Autosave no longer fires on "30 continuous dirty seconds". It fires after 5 s
+   without a keypress, and forced after 120 dirty seconds so a marathon session
+   is still saved. The idle tick is now the only place a public save starts.
+3. One word/statistics update per edit instead of two (the word delta computed
+   in `insert` is passed through `changed`).
+4. The typing coalescing window grows from 30 ms to 250 ms, and the automatic
+   full-refresh deferral from 1.5 s to 4 s per edit. A frame takes about 650 ms
+   anyway, so the shorter window only re-ran layout for a frame that could not be
+   shown sooner, and 1.5 s let a full refresh land inside slow typing.
+
+Save guarantees are unchanged: recovery is still written before the public
+file, external edits still produce a conflict copy, and a failed save stays
+visible and blocks the next write until another edit or an explicit save.
+Statistics after a sudden power loss can now lose up to about three minutes
+instead of one during an unbroken session; pause and exit lose nothing.
+HD/Bluetooth transport and the firmware input queue remain outside the app.
+
+Verification: native preview only in this turn; the desktop harness in the parent
+workspace was not re-run here, and the physical Bluetooth timing is unmeasured.
+
 ## Identity and scope
 
 - App ID: `inkwrite` (new app; preserve this ID for upgrades).

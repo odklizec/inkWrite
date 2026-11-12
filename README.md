@@ -1,6 +1,6 @@
 # inkWrite
 
-A quiet writing and journaling app for Xteink X4Pro and X4Classic. Current development build: **0.1.47**. Requires compatible Gancao firmware with XTApp API 2.18 support.
+A quiet writing and journaling app for Xteink X4Pro and X4Classic. Current development build: **0.1.51**. Requires compatible Gancao firmware with XTApp API 2.18 support.
 
 ## Start writing
 
@@ -38,7 +38,7 @@ Choose your font in **Ink App → Settings → Font**, then close and reopen ink
 
 Documents are ordinary UTF-8 `.md` or `.txt` files in **`/AppFiles/inkwrite/`**. Open File includes rename and delete controls. Delete asks for confirmation. Renaming copies and verifies the file before removing the source; interruption can leave both files or a partial new copy. Keep the app open during rename.
 
-Ctrl+S or Save writes to SD. Autosave runs after approximately five idle seconds or thirty dirty seconds. A failed autosave pauses retries until another edit or explicit save. A Saved label means the public write succeeded.
+Ctrl+S or Save writes to SD. Autosave runs after about five idle seconds without a keypress; while you keep typing it waits for a short gap, and a public save is forced after two dirty minutes at the latest. A failed autosave pauses retries until another edit or explicit save. A Saved label means the public write succeeded.
 
 If a loaded file changed externally, saving creates a conflict copy instead of silently replacing it. Differing recovery text reopens as a recovered copy. Check and save recovered text. Protected/recovery errors block unsafe changes.
 
@@ -62,7 +62,11 @@ Wireless export is optional future work and is not required for manual retrieval
 | Ctrl+A | Select all |
 | Shift+movement | Extend selection |
 | Ctrl+C / X / V | App-local copy / cut / paste |
-| Ctrl+B / Ctrl+I | Bold / italic Markdown markers |
+| Ctrl+B / Ctrl+I | Bold / italic markers (.md) |
+| Ctrl+1 to Ctrl+6 | Heading 1-6; Ctrl+0 removes it (.md) |
+| Ctrl+L | Bullet list line (.md) |
+| Ctrl+Quote | Quote line (.md) |
+| Ctrl+K | Link marker (.md) |
 | Home / End | Current visual line start / end |
 | Ctrl+Home / Ctrl+End | Document start / end |
 | Ctrl+Left / Right | Move by word |
@@ -84,7 +88,7 @@ The owner has confirmed working Bluetooth typing and the latest fast multi-tap g
 
 Open Settings → More → Statistics. Week and Month show daily typing-time bars; Year shows monthly bars. Switch periods on the same page using the tabs or arrow keys. Totals include words added, active typing time and foreground app time. Average/day divides typing time by elapsed calendar days in the current period, including days with no writing.
 
-Typing time includes editing and a 30-second idle grace after input; time while paused/asleep is excluded. Words added count positive document-word increases from insertion, including paste; deletions do not subtract and undo/formatting do not add words. Existing documents are not backfilled. Invalid device dates pause recording. History retains up to 400 recorded days, stored privately without document text. Checkpoints are written about once a minute and on pause/exit; sudden power loss may lose the latest uncheckpointed statistics. Uninstall removes private statistics.
+Typing time includes editing and a 30-second idle grace after input; time while paused/asleep is excluded. Words added count positive document-word increases from insertion, including paste; deletions do not subtract and undo/formatting do not add words. Existing documents are not backfilled. Invalid device dates pause recording. History retains up to 400 recorded days, stored privately without document text. Checkpoints are written about once a minute once typing pauses, never during a keystroke; a long unbroken session still checkpoints at least every three minutes, and pause/exit always writes. Sudden power loss may lose the latest uncheckpointed statistics. Uninstall removes private statistics.
 
 ## 0.1.33 national virtual character row
 
@@ -113,7 +117,7 @@ Swipe right starting within 32 pixels of the left screen edge to open the paged 
 
 
 
-The first typing frame after idle is prepared immediately. Further keystrokes share a 30 ms grouping window; an unchanged window requests no extra refresh. More → Memory & timing shows session maximum app input, queue, layout, drawing and save durations. Input-to-draw ends when the app has drawn the frame; it excludes Bluetooth transmission and the screen refresh. These numbers are diagnostic measurements, not a promise of screen response speed.
+The first typing frame after idle is prepared immediately. Further keystrokes share a 30 ms grouping window; an unchanged window requests no extra refresh. A wider window was measured on the device and made typing slower, because a frame requested during a refresh is merged into the next one anyway. More → Memory & timing opens its own page and shows six session counters, each as last / average / worst in milliseconds: input callback, layout, draw, key to prepare, key to drawn and save to SD. Key to drawn ends when the app has drawn the frame, so it includes the screen refresh (roughly 650 ms per frame) but not Bluetooth transmission. Key to prepare is the app-side number worth watching; key to drawn is dominated by the panel. These are diagnostic measurements, not a promise of screen response speed.
 
 
 

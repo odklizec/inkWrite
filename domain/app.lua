@@ -3,9 +3,17 @@ local Docs=require("domain.documents")
 local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
-local M={VERSION="0.1.47"}
+local M={VERSION="1.0.2"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
+-- Typing pacing. None of these shorten the panel's own frame time; they keep
+-- the app's work and SD writes out of the way of that frame.
+local COALESCE_MS=30           -- group keys closer together than this
+local FULL_REFRESH_DEFER=4000  -- keep the automatic full refresh out of a burst
+local FULL_REFRESH_HOLD=25000  -- ...but not for a whole session
+local QUIET_MS=700             -- a gap long enough to accept an SD write
+local SAVE_FORCE_MS=120000     -- never postpone a public save beyond this
+local STATS_FORCE_MS=180000    -- bound what a long unbroken session can lose
 local FONT_SIZES={20,24,28,30,32,36}
 local function preferred_font(ctx,px)
   local f=ctx.fonts.size and ctx.fonts:size(px)
@@ -20,7 +28,18 @@ local function message(ctx,s) A.message=s; ctx:invalidate() end
 local function now(ctx) return ctx.clock:millis() end
 local function age(t,earlier) return (t-earlier)&0x7fffffff end
 local function timing(metric,ms)
-  metric.last=ms;metric.max=math.max(metric.max,ms)
+  -- Last, mean and worst. A single worst case says very little here: one
+  -- unlucky sample reads 28 ms while a normal keystroke waits a whole frame.
+  if not metric then return end
+  metric.last=ms
+  metric.n=(metric.n or 0)+1
+  metric.sum=(metric.sum or 0)+ms
+  if ms>metric.max then metric.max=ms end
+end
+local function timing_line(label,key)
+  local t=A.timing[key]
+  local avg=t.n>0 and t.sum//t.n or 0
+  return label.." "..t.last.."/"..avg.."/"..t.max
 end
 local function selection()
   local p=A.buffer.pos; local a=A.anchor or p
@@ -122,8 +141,11 @@ local function cancel_redraw()
   A.pending_frame_since=nil
 end
 local function request_editor_frame(ctx)
-  -- First input after idle is prepared immediately. Subsequent inputs share
-  -- the fixed cooldown deadline; an unchanged window needs no second frame.
+  -- The first key after idle is prepared and shown at once. Keys that arrive
+  -- while that frame is being prepared share one 30 ms window: grouping them
+  -- saves a little work and never holds text back past the frame that is
+  -- already on its way. A wider window only delayed the newest text by a whole
+  -- refresh, which is what made typing feel slower.
   if A.redraw_timer then
     A.pending_frame_since=A.pending_frame_since or A.input_started or now(ctx)
     return
@@ -134,21 +156,28 @@ local function request_editor_frame(ctx)
     local p=A.prepared;local l=geometry(c)
     if not p or p.doc~=A.doc or p.view~=A.view or p.key~=l.key or p.font~=font(c)
       or p.revision~=A.buffer.revision or p.pos~=A.buffer.pos or p.top~=A.top or p.anchor~=A.anchor then
-      A.redraw_timer=c:after(30,flush)
+      A.redraw_timer=c:after(COALESCE_MS,flush)
       prepare_frame(c);c:invalidate()
     else A.pending_frame_since=nil end
   end
-  A.redraw_timer=ctx:after(30,flush)
+  A.redraw_timer=ctx:after(COALESCE_MS,flush)
   prepare_frame(ctx);ctx:invalidate()
 end
-local function changed(ctx,from)
-  if A.stats then A.stats:edit(ctx,0) end
+local function changed(ctx,from,words)
+  -- One statistics update per edit: the caller passes the word delta it already
+  -- knows, so a typed character is not accounted twice.
+  if A.stats then A.stats:edit(ctx,words or 0) end
   A.goal_x=nil
   local t=now(ctx)
   if not A.dirty then A.first_dirty=t end
   A.dirty=true; A.last_edit=t; A.save_failed=false; A.message=nil
   A.layout_dirty_from=math.min(A.layout_dirty_from or A.buffer.size,from or 0)
-  ctx:defer_full_refresh(1500)
+  -- Frames shown inside this window neither trigger nor count toward the
+  -- automatic full refresh, so slow typing no longer gets a 1.5 s flash in the
+  -- middle of a sentence. It stops extending after a long unbroken run, so
+  -- ghosting is still cleared during a marathon session.
+  A.typing_run=A.typing_run or t
+  if age(t,A.typing_run)<FULL_REFRESH_HOLD then ctx:defer_full_refresh(FULL_REFRESH_DEFER) end
   request_editor_frame(ctx)
 end
 local function insert(ctx,s,typing)
@@ -158,8 +187,7 @@ local function insert(ctx,s,typing)
   local ok,e=A.buffer:replace(a,z,s,nil,typing and a==z and A.typing_group or nil)
   if not ok then message(ctx,e); return end
   A.typing_time=typing and not s:find("%s") and t or nil
-  A.stats:edit(ctx,A.buffer.words-old_words)
-  A.anchor=nil; changed(ctx,a)
+  A.anchor=nil; changed(ctx,a,A.buffer.words-old_words)
 end
 local function move(ctx,p,shift)
   if shift then A.anchor=A.anchor or A.buffer.pos else A.anchor=nil end
@@ -175,6 +203,114 @@ local function clipboard(ctx,cut)
   if z-a>8192 then message(ctx,"Clipboard limit: 8 KiB; text unchanged"); return end
   A.clipboard=A.buffer:slice(a,z)
   if cut then insert(ctx,"") else message(ctx,"Copied inside inkWrite") end
+end
+-- Markdown source shortcuts. These only insert and remove markers; no rendering
+-- and no change to how the editor lays text out.
+local function markdown_doc(ctx)
+  if A.doc and A.doc.name and A.doc.name:lower():sub(-3)==".md" then return true end
+  message(ctx,"Markdown formatting is available in .md files")
+  return false
+end
+local function line_start(b,p)
+  local i=p
+  while i>0 do
+    if b:byte(i-1)==10 then break end
+    i=i-1
+  end
+  return i
+end
+local function line_end(b,p)
+  local i=p
+  while i<b.size do
+    if b:byte(i)==10 then break end
+    i=i+1
+  end
+  return i
+end
+-- "# " with a space is a heading; a bare run of hashes is ordinary text.
+local function heading_prefix(line)
+  local hashes=line:match("^(#+)")
+  if hashes and #hashes<=6 and line:sub(#hashes+1,#hashes+1)==" " then return #hashes end
+  return 0
+end
+local function without_heading(line)
+  local n=heading_prefix(line)
+  return n>0 and line:sub(n+2) or line
+end
+local function set_heading(line,level)
+  local base=without_heading(line)
+  if level==0 then return base end
+  if heading_prefix(line)==level then return base end
+  return string.rep("#",level).." "..base
+end
+local function set_bullet(line)
+  local base=without_heading(line)
+  if base:sub(1,2)=="- " then return base:sub(3) end
+  return "- "..base
+end
+local function set_quote(line)
+  local base=without_heading(line)
+  if base:sub(1,2)=="> " then return base:sub(3) end
+  return "> "..base
+end
+-- Toggle a line-start marker on every line the selection touches. The block is
+-- rebuilt as one string and replaced once, so byte offsets stay valid and undo
+-- records a single edit.
+local function markers(ctx,kind,level)
+  local b=A.buffer
+  local a,z=selection()
+  local s=line_start(b,a)
+  local e=line_end(b,z)
+  local block=b:slice(s,e)
+  local lines={}
+  for line in (block.."\n"):gmatch("(.-)\n") do lines[#lines+1]=line end
+  -- Remember which line the caret is on and how far into it, before the text
+  -- changes: the marker moves the caret by the same amount it changed the line.
+  local caret,offset=#lines,0
+  local run=s
+  for i=1,#lines do
+    local n=#lines[i]
+    if b.pos<=run+n then caret=i;offset=b.pos-run;break end
+    run=run+n+1
+  end
+  if offset<0 then offset=0 end
+  local out={}
+  for i=1,#lines do
+    if kind=="heading" then out[i]=set_heading(lines[i],level)
+    elseif kind=="bullet" then out[i]=set_bullet(lines[i])
+    else out[i]=set_quote(lines[i]) end
+  end
+  local new=table.concat(out,"\n")
+  if new==block then return end
+  local ok,err=b:replace(s,e,new)
+  if not ok then message(ctx,err);return end
+  A.anchor=nil
+  local start=s
+  for i=1,caret-1 do start=start+#out[i]+1 end
+  local shift=#out[caret]-#lines[caret]
+  local p=start+math.max(0,math.min(#out[caret],offset+shift))
+  while p>s and not b:is_boundary(p) do p=p-1 end
+  b:seek(p)
+  changed(ctx,s)
+end
+local function link(ctx)
+  local a,z=selection()
+  local s=A.buffer:slice(a,z)
+  local inner=s:match("^%[([^%]]*)%]%b()$")
+  local replacement,p
+  if inner then replacement,p=inner,a+#inner
+  elseif s=="" then replacement,p="[]()",a+1
+  else replacement,p="["..s.."]()",a+#s+3 end
+  local ok,err=A.buffer:replace(a,z,replacement)
+  if not ok then message(ctx,err);return end
+  A.anchor=nil;A.buffer:seek(p)
+  changed(ctx,a)
+end
+-- Shared gate for the marker shortcuts: editor only, .md only.
+local function markdown_action(ctx,fn)
+  if A.view~="editor" or A.blocked then return end
+  if not markdown_doc(ctx) then return end
+  fn()
 end
 local function format(ctx,marker)
   local a,z=selection(); local n=#marker
@@ -194,7 +330,7 @@ local function format(ctx,marker)
 end
 local function save(ctx)
   extend_budget(ctx)
-  A.typing_time=nil
+  A.typing_time=nil; A.typing_run=nil
   if A.blocked then message(ctx,"Recovery needs attention; existing files are protected"); return false end
   if not A.doc or not A.buffer then return false end
   if not A.dirty and A.doc.base~=nil then
@@ -455,12 +591,11 @@ local function command(ctx,i)
   elseif i==6 then A.view="files_help";A.help_page=1
   elseif i==7 then A.view="help";A.help_page=1
   elseif i==8 then
-    local heap="Lua heap unavailable"
-    if ctx.gc then ctx.gc:collect();heap="Lua heap: "..tostring(ctx.gc:count()//1024).." KiB" end
-    local t=A.timing
-    A.memory_sample=heap.."\nMax ms: input "..t.input.max..", layout "..t.layout.max..", draw "..t.draw.max..
-      "\nQueue "..t.queue.max..", save "..t.save.max..", input-to-draw "..t.compose.max.."\nExcludes Bluetooth and panel refresh"
-    ctx:invalidate()
+    -- Measuring the heap can be slow, so it is sampled once on opening; the
+    -- counters themselves are rebuilt every time the page is drawn.
+    A.memory_heap=nil
+    if ctx.gc then ctx.gc:collect();A.memory_heap="Lua heap: "..tostring(ctx.gc:count()//1024).." KiB" end
+    A.view="timing"
   elseif i==9 then close_request(ctx) end
   if i==10 then toggle_orientation(ctx) end
   if i==11 then
@@ -469,7 +604,7 @@ local function command(ctx,i)
   end
   if i==12 then today(ctx) end
   if i==13 then new_document(ctx,true) end
-  if i==15 then A.virtual=nil;A.view="statistics";A.stats_mode=A.stats_mode or 1;A.stats:tick(ctx) end
+  if i==15 then A.virtual=nil;A.view="statistics";A.stats_mode=A.stats_mode or 1;A.stats:tick(ctx,true) end
   if i==14 then A.view="layouts";A.focus=1 end
   ctx:invalidate()
 end
@@ -512,7 +647,7 @@ function M.load(ctx)
   extend_budget(ctx)
   A={view="editor",top=0,focus=1,large=ctx.state.large==true,caps=false,dirty=false,status="Unsaved",rows={}}
   A.timing={}
-  for _,key in ipairs({"input","layout","draw","queue","save","compose"}) do A.timing[key]={last=0,max=0} end
+  for _,key in ipairs({"input","layout","draw","queue","save","compose"}) do A.timing[key]={last=0,max=0,n=0,sum=0} end
   A.stats=Stats.new(ctx)
   A.focus_mode=ctx.state.focus_mode==true
   A.keyboard=Keyboard.new(ctx.state.keyboard_layout)
@@ -657,6 +792,28 @@ local function keyboard(ctx,ev)
     elseif code=="Enter" then if A.confirm_choice==2 then confirm_delete(ctx) else A.confirm_file=nil;A.view="library" end end
     ctx:invalidate();return true
   end
+  -- Keyboard-only access; Fn itself is not exposed by the host.
+  local shortcut = (mods.ctrl or mods.meta) and not mods.alt
+  local help_key = (code=="F1" and not mods.ctrl and not mods.meta and not mods.alt and not mods.shift)
+    or (code=="KeyH" and shortcut and not mods.shift)
+  if help_key and (A.view=="editor" or A.view=="help") then
+    if down then
+      cancel_navigation();cancel_redraw();A.keyboard:reset();A.typing_time=nil
+      A.panel=nil;A.action_focus=nil;A.virtual=nil
+      if A.view=="help" then A.view="editor" else A.view="help";A.help_page=1 end
+      ctx:invalidate()
+    end
+    return true
+  end
+  if A.view=="editor" and code=="KeyT" and shortcut and mods.shift then
+    if down then
+      cancel_navigation();cancel_redraw();A.keyboard:reset();A.typing_time=nil
+      if A.focus_mode then command(ctx,11) end
+      A.virtual=nil;A.panel=nil;A.action_focus=1;A.layout_revision=nil
+      ctx:invalidate()
+    end
+    return true
+  end
   if A.view=="editor" and (A.panel or A.action_focus) and not (code=="KeyF" and mods.shift and (mods.ctrl or mods.meta)) then
     if ev.phase=="up" then return true end
     if code=="Escape" and down then A.panel=nil;A.action_focus=nil;ctx:invalidate()
@@ -668,7 +825,7 @@ local function keyboard(ctx,ev)
   A.keyboard:modifier(ev)
   if ev.phase=="up" then return true end
   if not down and ev.phase~="repeat" then return true end
-  local edit_or_move=ev.text or code=="ArrowLeft" or code=="ArrowRight" or code=="ArrowUp" or code=="ArrowDown" or code=="Home" or code=="End" or code=="PageUp" or code=="PageDown" or code=="Backspace" or code=="Delete" or code=="Enter" or code=="Tab" or ((mods.ctrl or mods.meta) and (code=="KeyA" or code=="KeyX" or code=="KeyV" or code=="KeyB" or code=="KeyI" or code=="KeyZ"))
+  local edit_or_move=ev.text or code=="ArrowLeft" or code=="ArrowRight" or code=="ArrowUp" or code=="ArrowDown" or code=="Home" or code=="End" or code=="PageUp" or code=="PageDown" or code=="Backspace" or code=="Delete" or code=="Enter" or code=="Tab" or ((mods.ctrl or mods.meta) and (code=="KeyA" or code=="KeyX" or code=="KeyV" or code=="KeyB" or code=="KeyI" or code=="KeyZ" or code=="KeyK" or code=="KeyL" or code=="Quote" or code:match("^Digit[0-6]$")))
   if A.view=="editor" and A.browsing and edit_or_move then
     A.browsing=false;A.layout_revision=nil;cancel_navigation()
   end
@@ -752,8 +909,17 @@ local function keyboard(ctx,ev)
     elseif code=="KeyV" then
       if A.clipboard then insert(ctx,A.clipboard) else message(ctx,"inkWrite clipboard is empty") end
     elseif code=="KeyB" or code=="KeyI" then
-      if A.doc.name:lower():sub(-3)==".md" then format(ctx,code=="KeyB" and "**" or "*")
-      else message(ctx,"Markdown formatting is available in .md files") end
+      markdown_action(ctx,function() format(ctx,code=="KeyB" and "**" or "*") end)
+    elseif code=="KeyK" then
+      markdown_action(ctx,function() link(ctx) end)
+    elseif code=="KeyL" then
+      markdown_action(ctx,function() markers(ctx,"bullet") end)
+    elseif code=="Quote" then
+      markdown_action(ctx,function() markers(ctx,"quote") end)
+    elseif code=="Digit0" or code=="Digit1" or code=="Digit2" or code=="Digit3"
+      or code=="Digit4" or code=="Digit5" or code=="Digit6" then
+      local level=tonumber(code:sub(6))
+      markdown_action(ctx,function() markers(ctx,"heading",level) end)
     elseif code=="KeyA" then A.anchor=0; move(ctx,A.buffer.size,true)
     elseif code=="KeyZ" then
       local ok,e=A.buffer:undo_edit(mods.shift); A.anchor=nil
@@ -1141,11 +1307,20 @@ function M.input(ctx,ev)
   return false
 end
 function M.tick(ctx)
-  A.stats:tick(ctx)
+  -- The idle tick is the only place the statistics checkpoint and autosave may
+  -- write to SD, so a burst of typing never waits for a file write.
+  local t=now(ctx)
+  local quiet=not A.last_key or age(t,A.last_key)>=QUIET_MS
+  -- A pause starts a fresh full-refresh allowance.
+  if quiet then A.typing_run=nil end
+  -- A checkpoint still happens eventually during a marathon session, so a power
+  -- loss can never discard more than a few minutes of statistics.
+  local due=A.stats.saved and age(t,A.stats.saved)>=STATS_FORCE_MS
+  A.stats:tick(ctx,quiet or (due and true) or false)
   if A.close_modal then return end
   if A.dirty and not A.blocked and not A.save_failed then
-    local t=now(ctx)
-    if age(t,A.last_edit)>=5000 or age(t,A.first_dirty)>=30000 then save(ctx) end
+    local forced=A.first_dirty and age(t,A.first_dirty)>=SAVE_FORCE_MS
+    if (quiet and age(t,A.last_edit)>=5000) or forced then save(ctx) end
   end
 end
 -- A successful snapshot already protects this exact document revision.
@@ -1201,7 +1376,7 @@ end
 local function help_text(ctx)
   if A.view=="font_help" then return "Your Ink App font\n\nChoose the font in Ink App > Settings > Font. Then close and reopen inkWrite to start a new font session.\n\ninkWrite follows that choice for writing and controls. This page shows the font actually returned by the device.\n\nPut .ttf files in the SD card fonts folder. If the chosen font is unavailable or cannot open, the device may use the reader font or a built-in fallback.\n\nSize, line spacing and margins remain in inkWrite Typography. They change appearance only; saved document bytes are unchanged."
   elseif A.view=="files_help" then return "Your writing lives on the SD card:\n\n"..(ctx.files and ctx.files.path or "/AppFiles/inkwrite").."\n\nSave first. Power down the device, remove the SD card, then copy the .md or .txt files using a card reader.\n\nOpen them in any text editor. No account or conversion needed.\n\nPrivate recovery is removed on uninstall; saved public files remain."
-  elseif A.view=="help" then return "Ctrl+S   Save\nCtrl+N   New document\nCtrl+O   Open file\nCtrl+J   Today journal\nCtrl+Z   Undo\nCtrl+Shift+Z   Redo\nCtrl+A   Select all\nCtrl+C / X / V   Copy / cut / paste\nCtrl+B / I   Bold / italic (.md)\nCtrl+Shift+F   Toggle focus\nCtrl+Shift+S   Rotate screen\nAlt+Shift / Ctrl+Space   Next keyboard\nCtrl+R   Full screen refresh\n\nLeft / Right   Move character\nCtrl+Left / Right   Move word\nHome / End   Start / end of line\nCtrl+Home / End   Start / end of file\nPageUp / PageDown   Move page\nShift+movement   Select text\nEscape / Back   Return / menu\n\nTouch controls\nDouble-tap word   Select word\nTriple-tap word   Select sentence\nDouble-tap empty space   Focus\nSwipe up / down   Browse text\nLeft edge >   Shortcuts\nRight edge <   Statistics\nBottom edge up   Virtual keyboard\nKeyboard icon   Choose language\nWord count   Statistics\n\nType a letter before its accent.\nClipboard stays inside inkWrite."
+  elseif A.view=="help" then return "Ctrl+H or F1   Keyboard help\nCtrl+Shift+T   Focus toolbar\nEscape   Back to writing\nCtrl+S   Save\nCtrl+N   New document\nCtrl+O   Open file\nCtrl+J   Today journal\nCtrl+Z   Undo\nCtrl+Shift+Z   Redo\nCtrl+A   Select all\nCtrl+C / X / V   Copy / cut / paste\nCtrl+B / I   Bold / italic (.md)\nCtrl+1 to Ctrl+6   Heading 1-6 (.md)\nCtrl+0   Remove heading (.md)\nCtrl+L   Bullet list (.md)\nCtrl+Quote   Quote line (.md)\nCtrl+K   Link (.md)\nCtrl+Shift+F   Toggle focus\nCtrl+Shift+S   Rotate screen\nAlt+Shift / Ctrl+Space   Next keyboard\nCtrl+R   Full screen refresh\n\nMarkdown shortcuts insert the markers in the text and work on every line the selection touches. The editor shows plain source; nothing is rendered.\n\nLeft / Right   Move character\nCtrl+Left / Right   Move word\nHome / End   Start / end of line\nCtrl+Home / End   Start / end of file\nPageUp / PageDown   Move page\nShift+movement   Select text\nEscape / Back   Return / menu\n\nTouch controls\nDouble-tap word   Select word\nTriple-tap word   Select sentence\nDouble-tap empty space   Focus\nSwipe up / down   Browse text\nLeft edge >   Shortcuts\nRight edge <   Statistics\nBottom edge up   Virtual keyboard\nKeyboard icon   Choose language\nWord count   Statistics\n\nType a letter before its accent.\nClipboard stays inside inkWrite."
   end
 end
 -- Layout is prepared in lifecycle/input/timer callbacks, never in draw.
@@ -1334,7 +1509,7 @@ local function editor_chrome(ctx,g,l)
   local y=top+(focused and 20 or 50)
   local code=Keyboard.code(A.keyboard.id)
   if not focused then
-    local titles={menu="More",library="Open file",typography="Typography",fonts="Fonts",layouts="Keyboard",font_help="Fonts",orientation_help="Screen rotate",files_help="SD files",help="Shortcuts",delete_confirm="Delete file?",statistics="Statistics"}
+    local titles={menu="More",library="Open file",typography="Typography",fonts="Fonts",layouts="Keyboard",font_help="Fonts",orientation_help="Screen rotate",files_help="SD files",help="Shortcuts",delete_confirm="Delete file?",statistics="Statistics",timing="Memory & timing"}
     box(g,A.ui_medium,l.chrome_left,top+2,l.chrome_right-l.chrome_left-(A.view=="menu" and 120 or A.view=="editor" and 44 or 0),36,titles[A.view] or A.doc.name)
     if A.view=="menu" then g:text(l.chrome_right,top+20,M.VERSION,{font=ui,align="right",valign="middle"}) end
     if A.view=="editor" then local x=l.chrome_right-22;g:line(x-7,top+13,x+7,top+27);g:line(x+7,top+13,x-7,top+27) end
@@ -1473,11 +1648,11 @@ function M.draw(ctx,g)
         box(g,A.ui_small,l.x+34,y+4,l.w-34,36,label)
       else box(g,A.ui_small,l.x,y+4,l.w,36,label) end
     end
-    if A.view=="menu" and A.memory_sample then
-      local y=l.body+#rows*l.row+16
-      box(g,A.ui_small,l.x,y,l.w,math.max(0,l.dock-y-8),A.memory_sample)
-    end
     pager(g,ui,l,((A.focus-1)//per)+1,math.max(1,(#rows+per-1)//per))
+  elseif A.view=="timing" then
+    local small=A.ui_small
+    box(g,small,l.x,l.body,l.w,math.max(0,l.foot-l.body-8),timing_sample())
+    pager(g,small,l,1,1)
   elseif A.view=="delete_confirm" then
     box(g,ui,l.x,l.body,l.w,60,A.confirm_file and A.confirm_file.name or "")
     box(g,ui,l.x,l.body+68,l.w,80,"Permanently delete this SD file?\nThis cannot be undone.")
@@ -1547,15 +1722,16 @@ function M.draw(ctx,g)
     end
   end
 end
--- First input after idle prepares immediately; bursts share a 30 ms deadline.
--- the latest revision. Other navigation/lifecycle changes prepare immediately.
+-- Every callback that can change the picture prepares itself; this wrapper only
+-- repairs a snapshot that no longer matches (a document change, a rotation, a
+-- notice) so the next frame is never built from stale rows.
 for _,name in ipairs({"load","input","tick","resume"}) do
   local callback=M[name]
   M[name]=function(ctx,...)
     local started=name=="input" and A and A.view=="editor" and now(ctx) or nil
-    if started and A then A.input_started=started end
+    if started and A then A.input_started=started;A.last_key=started end
     local result=callback(ctx,...)
-    if A and (not A.redraw_timer or not frame_ready(geometry(ctx),font(ctx))) then prepare_frame(ctx) end
+    if A and not frame_ready(geometry(ctx),font(ctx)) then prepare_frame(ctx) end
     if started and A then timing(A.timing.input,age(now(ctx),started));A.input_started=nil end
     return result
   end
