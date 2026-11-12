@@ -1,3 +1,30 @@
+## 2026-11-12 — GitHub sync phase 0 (no editor integration)
+
+Explicitly opened the latest original cloud inkWrite (project
+bc6ebcee-26df-4d19-b814-b9e488605d51), after exporting a local backup. Imported
+the cloud source on phase0/github-sync-audit; manifest 1.0.1, runtime 1.0.2 and
+README 0.1.51 conflict. Preserve and review that drift before release. Cloud
+autosave is 5 s idle / 120 s forced, superseding the old 30 s notes below.
+
+Added GITHUB-SYNC-AUDIT.md, ADR-0001-GITHUB-SYNC-TRANSPORT-AUTH.md,
+GITHUB-SYNC-BASELINE.json, a reproducible Fengari runner and an isolated
+tools/github-sync-probe app. No inkWrite Lua, identity, network permission,
+storage schema, editor UI or save behavior changed after the baseline import.
+No production credentials or Worker deployment. ADR is proposed, not approved.
+
+GitHub 0.1.47 existing tests: 7/7 pass, 13532 returned assertions including
+overlapping suites. Latest cloud: 3/7 pass, four existing mock-statistics
+compatibility failures before and after phase 0. Existing tests unchanged;
+regression acceptance is not green. Probe: 93 mock assertions pass. Native
+preview upload was rejected by automatic approval review as an unapproved
+external source upload. No workaround used; both preview/device variants are
+NOT TESTED. Owner approval is required for the standalone probe upload before
+native preview can proceed. Cloud retrieval does not prove a new cloud save.
+
+See the audit for exact tests, API evidence, save hook and next gates. The old
+docs/GITHUB_SYNC.json describes the 0.1.47 release, not this branch or document
+sync. No phase 1 integration or production transport should be inferred.
+
 ## Maintenance 0.1.47 — follow the Ink App font preference
 
 Confirmed the reported font bug in the controller: empty font_name selected ctx.fonts.medium/large directly, bypassing the user's font; its picker called the removed installed/open API. Migrated to ctx.fonts:size(px), without checking the retired ttf capability flag. Preload 20/24/30 px UI fonts during on_load and acquire the selected body size in lifecycle/input callbacks. Drawing reuses those objects; no font opens occur in on_draw. All writing, preview, chrome, lists, help and virtual-key labels use the preferred font. Six bounded sizes: 20/24/28/30/32/36. No extra reserve or framebuffer. The host owns cache/memory.

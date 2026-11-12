@@ -1,0 +1,98 @@
+{
+  "auditDate": "2026-11-12",
+  "cloudProjectId": "bc6ebcee-26df-4d19-b814-b9e488605d51",
+  "cloudDisplayedSave": "2026-11-11 22:06 (Studio display)",
+  "exportedAt": "2026-11-12T19:18:20.620Z",
+  "archiveSha256": "f8dbfc1bf573f2bbc59242d27ecf85e82a34d7e394d86e6c96875cf090545f0e",
+  "githubMain": "5684402fded124006ee5a3de8e1b158e4a93d893",
+  "importedBaselineCommit": "afb3ba3d5f876cd9441c1c1cbaaba5dc9520cdd6",
+  "manifestVersion": "1.0.1",
+  "runtimeVersion": "1.0.2",
+  "readmeVersion": "0.1.51",
+  "api": "2.18",
+  "newCloudSave": false,
+  "cloudOpenUncommittedRowObserved": true,
+  "sourceLineEndingNormalization": "CRCRLF / CRLF to LF; document data not touched",
+  "files": [
+    {
+      "path": "docs/HANDOVER.md",
+      "archiveSha256": "904fdd1ca42124b01d890b43e312c83a584889a21b6816db1deb4e39444883f1",
+      "normalizedSha256": "904fdd1ca42124b01d890b43e312c83a584889a21b6816db1deb4e39444883f1",
+      "importedBlobSha256": "904fdd1ca42124b01d890b43e312c83a584889a21b6816db1deb4e39444883f1",
+      "matchesNormalizedImportedBaseline": true
+    },
+    {
+      "path": "domain/app.lua",
+      "archiveSha256": "63e17c242fd306064d3e5c5a11cf2d68f2b8a02d223fa95398a85f17e79e9924",
+      "normalizedSha256": "f18490da59df00a254df259d0599e645fa0be433bdd2c48ed4b48dc6bda6215a",
+      "importedBlobSha256": "f18490da59df00a254df259d0599e645fa0be433bdd2c48ed4b48dc6bda6215a",
+      "matchesNormalizedImportedBaseline": true
+    },
+    {
+      "path": "domain/buffer.lua",
+      "archiveSha256": "35eeddeeb69cd68ac421a683f05a50e0fdf3b01f555e56e792aced77c437cab2",
+      "normalizedSha256": "af06e213bccd8986e6115e6bd3cbef420b5b2c25f758387bb4aece722b2a76f7",
+      "importedBlobSha256": "35eeddeeb69cd68ac421a683f05a50e0fdf3b01f555e56e792aced77c437cab2",
+      "matchesNormalizedImportedBaseline": true
+    },
+    {
+      "path": "domain/documents.lua",
+      "archiveSha256": "497e6beba92dbeb50bc13d0a0d26734daaf56c219068e2947bc5d87a2b54a18a",
+      "normalizedSha256": "497e6beba92dbeb50bc13d0a0d26734daaf56c219068e2947bc5d87a2b54a18a",
+      "importedBlobSha256": "497e6beba92dbeb50bc13d0a0d26734daaf56c219068e2947bc5d87a2b54a18a",
+      "matchesNormalizedImportedBaseline": true
+    },
+    {
+      "path": "domain/layout.lua",
+      "archiveSha256": "513a470fb51bab68538923d80318ac7594c5f284e4765ea9ba7e0b6221647c59",
+      "normalizedSha256": "513a470fb51bab68538923d80318ac7594c5f284e4765ea9ba7e0b6221647c59",
+      "importedBlobSha256": "513a470fb51bab68538923d80318ac7594c5f284e4765ea9ba7e0b6221647c59",
+      "matchesNormalizedImportedBaseline": true
+    },
+    {
+      "path": "domain/stats.lua",
+      "archiveSha256": "8e7ba87e47bd71aa9af35504250b0b58471801f675ebcce5b117851484e25cb4",
+      "normalizedSha256": "8e7ba87e47bd71aa9af35504250b0b58471801f675ebcce5b117851484e25cb4",
+      "importedBlobSha256": "8e7ba87e47bd71aa9af35504250b0b58471801f675ebcce5b117851484e25cb4",
+      "matchesNormalizedImportedBaseline": true
+    },
+    {
+      "path": "index.lua",
+      "archiveSha256": "8841e0e83fa802e3b5880a9cb2806b1d174467001790cb932277cce570349f4e",
+      "normalizedSha256": "8841e0e83fa802e3b5880a9cb2806b1d174467001790cb932277cce570349f4e",
+      "importedBlobSha256": "8841e0e83fa802e3b5880a9cb2806b1d174467001790cb932277cce570349f4e",
+      "matchesNormalizedImportedBaseline": true
+    },
+    {
+      "path": "keyboard.lua",
+      "archiveSha256": "9ad595199e783cc593c8c0897e5f92bf5b7cb01418cc2eb5864db3c52e2949e9",
+      "normalizedSha256": "9ad595199e783cc593c8c0897e5f92bf5b7cb01418cc2eb5864db3c52e2949e9",
+      "importedBlobSha256": "9ad595199e783cc593c8c0897e5f92bf5b7cb01418cc2eb5864db3c52e2949e9",
+      "matchesNormalizedImportedBaseline": true
+    },
+    {
+      "path": "manifest.json",
+      "archiveSha256": "cf8081ffb2eb0eb70e08adfa37c6812ab729940e38478cf66b06157cc5e7a9ac",
+      "normalizedSha256": "106a59ae02fc78c565b8bc743add87b64f6823585d856404f5ce7672dea38446",
+      "importedBlobSha256": "106a59ae02fc78c565b8bc743add87b64f6823585d856404f5ce7672dea38446",
+      "matchesNormalizedImportedBaseline": true
+    },
+    {
+      "path": "README.md",
+      "archiveSha256": "3befb87e7d7540543e42b6f53b8630fcf811f4b240baeceefdc573ac0cff1849",
+      "normalizedSha256": "3befb87e7d7540543e42b6f53b8630fcf811f4b240baeceefdc573ac0cff1849",
+      "importedBlobSha256": "3befb87e7d7540543e42b6f53b8630fcf811f4b240baeceefdc573ac0cff1849",
+      "matchesNormalizedImportedBaseline": true
+    },
+    {
+      "path": "assets/app_icon_l.xic",
+      "sha256": "fe390c1031675276a9d0be35e7edd871fe1092a7f493c5cd4e07ffd965d97b63",
+      "matchesGitHubAndCloud": true
+    },
+    {
+      "path": "assets/app_icon_s.xic",
+      "sha256": "6a9c6daa994f7f2375f5d4e9dc2a4d648e0960d8a9ebd05608d4279272193c2d",
+      "matchesGitHubAndCloud": true
+    }
+  ]
+}
