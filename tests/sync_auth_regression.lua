@@ -113,6 +113,9 @@ for _,err in ipairs({'access_denied','expired_token','device_flow_disabled','inc
  a,b=start();b:respond({error=err});check(not a:status(b.ctx).connected and a:status(b.ctx).reason~='arbitrary private response','OAuth error safely redacted')
 end
 a,b=start();b:respond('{}',200,{ok=false,err='io_error'});check(a:status(b.ctx).state=='offline','TLS failure does not authorize')
+a,b=start();b:respond({message='private server details'},502)
+check(a:status(b.ctx).http_status==502 and a:status(b.ctx).reason=='server_error','bounded HTTP status without response body')
+a:disconnect();check(a:status(b.ctx).http_status==nil,'disconnect clears diagnostic status')
 a,b=start();local cb=b:respond(Host.token());a:pause();check(b.cancelled==1 and a:status(b.ctx).state=='disconnected','pause cancels verification and clears session')
 cb();check(a:status(b.ctx).state=='disconnected','late token callback cannot reconnect')
 a,b=connect();a:read(b.ctx,'ideas.md',function()error('cancelled callback')end);a:disconnect()

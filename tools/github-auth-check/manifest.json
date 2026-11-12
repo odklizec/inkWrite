@@ -1,0 +1,10 @@
+{
+  "app_id": "inkwrite.githubauthcheck",
+  "display_name": "inkWrite GitHub sign-in check",
+  "version": "0.0.2",
+  "api": "2.18",
+  "entry": "index.lua",
+  "description": "Check memory-only GitHub authorization without uploading documents",
+  "permissions": ["net"],
+  "display": {"orientation": "system"}
+}

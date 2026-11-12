@@ -1,3 +1,20 @@
+## Phase 2 public setup and separate sign-in diagnostic
+
+Owner supplied public Client ID/App ID, login and docs repo/main. Configured
+domain/sync_config.lua; connector verified private repo ID 1455886532 and main.
+Added separate tools/github-auth-check app (inkwrite.githubauthcheck, saved v0.0.2),
+explicit builder, button/touch/lifecycle tests. No document operation controls.
+Auth public status now includes a bounded HTTP code for diagnosing failed HTTPS;
+no response bodies/credentials are exposed. Writer runtime/version remain 1.0.6.
+Pro native starts/draws/touch handles with fault null and zero Studio diagnostics.
+GitHub device-code request: Studio 502 twice; independent desktop HTTPS 200 with
+valid device-flow response. No codes persisted/printed, no token exchange.
+See tools/github-auth-check/README.md for device instructions and exact limits.
+Live device authorization and App scope/revocation acceptance still pending.
+Classic native startup and Back exit pass with fault null. Desktop 16/16 suites,
+14,448 assertions. Diagnostic cloud project 803d9404-1aa3-469a-8547-96e7425bf08d
+saved successfully; exported ten Lua sources + manifest are verified separately.
+
 ## 1.0.6 — Phase 2 Direct GitHub, live acceptance pending
 
 Owner chose Direct GitHub/RAM-only sessions; App not set up. Added sync_auth.lua

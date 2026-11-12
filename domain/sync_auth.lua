@@ -36,6 +36,7 @@ function M.new(config,primitives)
   local api=assert(Transport.new('https://api.github.com'))
   local generation,busy=0,false
   local state,reason='disconnected',nil
+  local http_status
   local token,token_start,token_ms,device_code,user_code,code_start,code_ms,last_poll,interval
   local verified,account_id,repository_id=false,nil,nil
   local s={}
@@ -70,7 +71,10 @@ function M.new(config,primitives)
   local function send(ctx,transport,request,fn)
     local id=generation
     local ok,err=transport:request(ctx,request,function(c,res)
-      if generation==id then fn(c,res)end
+      if generation==id then
+        http_status=int(res.status,100,599)and res.status or nil
+        fn(c,res)
+      end
     end)
     if not ok and generation==id then fn(ctx,{err=err})end
   end
@@ -132,7 +136,7 @@ function M.new(config,primitives)
       end)
     end)
   end
-  function s:disconnect()stop('disconnected',nil)end
+  function s:disconnect()http_status=nil;stop('disconnected',nil)end
   s.pause=s.disconnect;s.cancel=s.disconnect
   function s:status(ctx)
     if token then valid_token(ctx)end
@@ -140,14 +144,14 @@ function M.new(config,primitives)
       local now=clock(ctx)
       if not now or age(now,code_start)>=code_ms then stop('auth_required','code_expired')end
     end
-    return {state=state,reason=reason,busy=busy,connected=verified and token~=nil,
+    return {state=state,reason=reason,http_status=http_status,busy=busy,connected=verified and token~=nil,
       login=verified and expected_login or nil,repo=scope.repo,branch=scope.branch,
       user_code=user_code,verification_uri=user_code and M.VERIFY_URL or nil}
   end
   function s:start(ctx)
     if busy then return nil,'busy'end
     if token then return nil,'disconnect_first'end
-    stop('requesting_code',nil);local now=clock(ctx)
+    http_status=nil;stop('requesting_code',nil);local now=clock(ctx)
     if not now then failure('clock_unavailable');return nil,'clock_unavailable'end
     busy=true;code_start=now
     send(ctx,oauth,{path='/login/device/code',method='POST',response_limit=4096,

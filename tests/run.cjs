@@ -19,6 +19,7 @@ for(const suite of suites) {
     const modules=['keyboard',...fs.readdirSync(path.join(root,'domain')).filter(n=>n.endsWith('.lua')).map(n=>'domain.'+n.slice(0,-4))];
     for(const name of modules)execute(`package.preload[${JSON.stringify(name)}]=function(...)\n${fs.readFileSync(path.join(root,name.replaceAll('.','/')+'.lua'),'utf8')}\nend`);
     execute(`package.preload.probe=function(...)\n${fs.readFileSync(path.join(probeDir,'probe.lua'),'utf8')}\nend`);
+    execute(`package.preload.auth_check=function(...)\n${fs.readFileSync(path.join(root,'tools/github-auth-check/auth_check.lua'),'utf8')}\nend`);
     for(const folder of ['support','fixtures'])for(const file of fs.readdirSync(path.join(__dirname,folder)).filter(n=>n.endsWith('.lua'))) {
       const name='tests.'+folder+'.'+file.slice(0,-4);
       execute(`package.preload[${JSON.stringify(name)}]=function(...)\n${fs.readFileSync(path.join(__dirname,folder,file),'utf8')}\nend`);

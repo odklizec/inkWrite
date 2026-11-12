@@ -70,10 +70,26 @@ Current contract evidence: public XTApp 2.x sections 14 (network), 10 (JSON),
 Current official device-flow, registration and installation-access docs were read;
 links and concrete public setup steps are in GITHUB-APP-SETUP.md.
 
+## Public setup supplied — separate diagnostic
+
+Owner supplied public IDs and selected `odklizec/inkwrite-docs` / `main`.
+`domain/sync_config.lua` binds those values and repository ID 1455886532 (private
+repository and main branch verified through the connector). This does not prove
+the new GitHub App installation or its scope. No real token has been obtained.
+
+The separate `tools/github-auth-check` app exercises only sign-in/metadata checks,
+with no document operation or persistence control. Pro native preview runs and
+handles touch; the HTTPS request returns 502 via Studio. The same public-client
+device-code request from desktop HTTPS returns 200 with a valid device-flow
+response; authorization codes were discarded without printing/persistence.
+Studio's networking path is the likely blocker. The actual device needs a test;
+see that app's README. Auth now exposes only the numeric last HTTP status as an
+additional safe diagnostic. No raw bodies or headers enter its UI/status.
+
 ## Next step
 
-Follow [GitHub App setup](GITHUB-APP-SETUP.md). Send only public client ID, App ID,
-expected login and the separate private docs repo/branch. Then configure and test
-real HTTPS/authentication. Live revoked-token behavior, physical devices, network
+Use the separate sign-in diagnostic for real device HTTPS/authentication. See
+[device instructions](../tools/github-auth-check/README.md).
+Live revoked-token behavior, physical devices, network
 compatibility, power loss and memory/timing remain **NOT TESTED**. No production
 sync or Phase 2 completion is claimed; Phase 3 supplies the editor's manual UI.
