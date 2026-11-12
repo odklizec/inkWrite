@@ -1,3 +1,11 @@
+## Phase 2 preparation — no runtime release
+
+Added inactive bounded HTTPS and host hash/base64 adapters, with two mock suites.
+All 14 suites pass, 14,314 assertions. Architecture choice and public GitHub App
+setup questions are pending; no credentials/auth implementation/hosting chosen.
+Phase 2 is incomplete. Cloud stays verified Phase 1 v1.0.5, runtime unchanged.
+See GITHUB-SYNC-PHASE2.md. Real HTTPS/hardware acceptance remains NOT TESTED.
+
 ## 1.0.5 — GitHub sync phase 1 (inactive core, 2026-11-12)
 
 Owner accepted filename fix and authorized the next phase. Added pure sync
