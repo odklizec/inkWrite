@@ -1,3 +1,5 @@
+> Superseded for credential lifetime by 1.0.8: the owner rejected per-launch browser authorization. Direct GitHub remains; optional remembered credentials with explicit SD-storage consent and device-flow refresh replace the RAM-only restriction. Current GitHub documentation explicitly exempts device-flow tokens from the client-secret requirement when refreshing. No relay or App secret is required. See [connection correction](GITHUB-CONNECTION-1.0.8.md). The historical decision follows.
+
 # ADR 0001: GitHub sync transport and per-user authorization
 
 Date: 2026-11-12. Status: **Direct GitHub with memory-only sessions approved by

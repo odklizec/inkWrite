@@ -11,10 +11,14 @@ function M.new(hooks,small,title,dependencies)
     rows={{label='Back',action='back'}}
     if u.page=='main'then
       rows[#rows+1]={label='GitHub sync: '..(ctx.state.github_sync_enabled==true and 'On'or 'Off'),action='toggle'}
-      rows[#rows+1]={label=(status.connected or status.busy or status.user_code)and 'Disconnect'or 'Connect',action='connect'}
+      rows[#rows+1]={label=(status.connected or status.busy or status.user_code)and (ctx.state.github_sync_remember==true and 'Disconnect for now'or 'Disconnect')or 'Connect',action='connect'}
       rows[#rows+1]={label='Upload current saved document',action='upload'}
       rows[#rows+1]={label='Browse remote documents',action='browse'}
       rows[#rows+1]={label='How to revoke access',action='revoke'}
+      rows[#rows+1]={label=ctx.state.github_sync_remember==true and 'Forget saved connection'or 'Remember connection on this device',action='remember'}
+      if ctx.state.github_sync_remember==true and status.connected and status.remember_error=='connection_write_failed'then
+        rows[#rows+1]={label='Retry saving connection',action='retry_remember'}
+      end
     elseif u.page=='remote'then
       rows[#rows+1]={label='Refresh remote folder',action='browse'}
       for _,r in ipairs(s.rows)do rows[#rows+1]={label=r.name,action='select',file=r}end
@@ -25,23 +29,40 @@ function M.new(hooks,small,title,dependencies)
       rows[1].label='Cancel'
       rows[#rows+1]={label='Upload local as NEW remote file',action='new'}
       if s.conflict and s.conflict.sha then rows[#rows+1]={label='Download remote as local copy',action='download',file=s.conflict}end
+    elseif u.page=='remember'then
+      rows[1].label='Cancel'
+      rows[#rows+1]={label='Remember on this device',action='consent'}
     end
     header={Config.scope.repo..' / '..Config.scope.branch,'Status: '..status.state:gsub('_',' '),s.notice}
-    if status.user_code then header[3]='github.com/login/device  Code: '..status.user_code end
+    if status.user_code then
+      header[2]='github.com/login/device'
+      header[3]='Sign-in code: '..status.user_code
+    elseif status.state=='requesting_code'then header[3]='Requesting a new sign-in code...'
+    elseif status.state=='refreshing'then header[3]='Renewing saved connection...'
+    elseif status.remember_error then
+      local errors={clock_unavailable='Set device time; connection was not saved.',connection_write_failed='Could not save connection. Retry Remember.',remember_requires_signin='Connect once again to save the connection.'}
+      header[3]=errors[status.remember_error]or 'Saved connection unavailable. Retry or Forget.'
+    elseif status.reason then
+      local errors={code_expired='Code expired. Select Connect for a new code.',no_network='No network. Retry Connect.',server_error='GitHub request failed. Retry Connect.',expired_token='Saved authorization expired. Connect again.',
+        bad_refresh_token='Saved authorization expired or revoked. Connect again.',authorization_required='Authorization required. Connect again.',clock_unavailable='Set device time, then retry Connect.'}
+      header[3]=errors[status.reason]or 'Connection failed. Retry Connect; check App setup.'
+    end
     if u.page=='confirm'then header[3]='Download: '..u.selected.name end
     if u.page=='revoke'then header[3]='GitHub Settings > Applications > Authorized GitHub Apps. Revoke inkWrite; then disconnect here.'end
+    if u.page=='remember'then header[3]='Save GitHub login unencrypted on SD.\nAnyone with the card can recover it.'end
     local o=ctx.screen.occlusion or {};local x,y=(o.left or 0)+16,(o.top or 0)+12
     local w=ctx.screen.width-(o.right or 0)-x-16
     local bottom=ctx.screen.height-(o.bottom or 0)-12
-    local line=small.line_height+4;local top=y+title.line_height+8+line*4
+    local notice_lines=u.page=='remember'and 4 or 2
+    local line=small.line_height+4;local top=y+title.line_height+8+line*(2+notice_lines)
     local rh=math.max(44,small.line_height+12)
     local per=math.max(1,(bottom-top-50)//rh)
     u.focus=math.max(1,math.min(#rows,u.focus))
-    geometry={x=x,y=y,w=w,bottom=bottom,top=top,row=rh,per=per,first=((u.focus-1)//per)*per+1,line=line}
-    local next_key=table.concat({u.page,u.focus,status.state,status.user_code or '',tostring(s.busy),s.notice,#rows,w,bottom},'|')
+    geometry={x=x,y=y,w=w,bottom=bottom,top=top,row=rh,per=per,first=((u.focus-1)//per)*per+1,line=line,notice_lines=notice_lines}
+    local next_key=table.concat({u.page,u.focus,status.state,status.user_code or '',tostring(status.busy),status.reason or '',status.remember_error or '',tostring(s.busy),s.notice,#rows,w,bottom},'|')
     if key~=next_key then key=next_key;ctx:invalidate()end
   end
-  function u:open(ctx)self.active=true;self.page='main';self.focus=1;key=nil;prepare(ctx)end
+  function u:open(ctx)self.active=true;self.page='main';self.focus=1;key=nil;s:open(ctx);prepare(ctx)end
   local function back(ctx)
     if s.busy then s:disconnect(ctx)end
     if u.page=='main'then s:close(ctx);u.active=false;ctx:invalidate()
@@ -60,6 +81,11 @@ function M.new(hooks,small,title,dependencies)
     elseif r.action=='select'then u.selected=r.file;u.page='confirm';u.focus=1
     elseif r.action=='download'then s:download(ctx,r.file);u.page='main';u.focus=1
     elseif r.action=='revoke'then u.page='revoke';u.focus=1 end
+    if r.action=='remember'then
+      if ctx.state.github_sync_remember==true then s:forget(ctx)
+      else u.page='remember';u.focus=1 end
+    elseif r.action=='consent'then s:remember(ctx);u.page='main';u.focus=1
+    elseif r.action=='retry_remember'then s:remember(ctx)end
     prepare(ctx)
   end
   function u:input(ctx,ev)
@@ -93,15 +119,17 @@ function M.new(hooks,small,title,dependencies)
   function u:tick(ctx)
     if status.state=='authorizing'then s:poll(ctx)end
     prepare(ctx)
+    if status.reason=='session_expired'and ctx.state.github_sync_remember==true then s:open(ctx);prepare(ctx)end
   end
-  function u:pause(ctx)s:disconnect(ctx);key=nil;if self.active then prepare(ctx)end end
-  function u:resume(ctx)if self.active then key=nil;prepare(ctx)end end
+  function u:pause(ctx)s:pause(ctx);key=nil;if self.active then prepare(ctx)end end
+  function u:resume(ctx)if self.active then key=nil;s:open(ctx);prepare(ctx)end end
+  function u:leave(ctx)s:leave(ctx)end
   function u:draw(ctx,g)
     local l=geometry;g:clear(0)
     g:text(l.x,l.y,'GitHub sync',{font=title,color=15})
     local y=l.y+title.line_height+8
     for i,line in ipairs(header)do
-      g:text_box(l.x,y,l.w,l.line*(i==3 and 2 or 1),line,{font=small,color=15,wrap='word',overflow='ellipsis'})
+      g:text_box(l.x,y,l.w,l.line*(i==3 and l.notice_lines or 1),line,{font=small,color=15,wrap='word',overflow='ellipsis'})
       y=y+l.line
     end
     for i=l.first,math.min(#rows,l.first+l.per-1)do

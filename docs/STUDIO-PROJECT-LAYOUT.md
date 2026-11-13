@@ -1,3 +1,5 @@
+Build 1.0.8 adds domain/sync_credentials.lua to the shipping allowlist: **seventeen** executable Lua files. Credential data lives in app-private runtime storage and is never a source file, Studio backup input, fixture, log or repository artifact. The standalone sign-in diagnostic builder includes this required module but never enables persistence.
+
 # Studio project layout — Phase 3
 
 The development cloud project keeps its historical name **inkWrite GitHub Sync Phase 0** and ID e6d7a10b-8bdc-4f4c-bf77-1f5dfa1e5395. Phase 3 activates sixteen explicitly allowlisted Lua files: the original seven editor files plus sync core, metadata, auth, public config, HTTPS transport, primitives, GitHub payload validation, manual session controller and sync UI. The manifest now declares only `net` permission. Test/probe/diagnostic/tool code remains non-executable text under docs/development/, with DEVELOPMENT-SOURCE-MAP.json for restoring original paths.

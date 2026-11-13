@@ -6,7 +6,7 @@ if a.stage.exists():p.error('stage must not exist')
 repo=Path(__file__).resolve().parent.parent
 files={'manifest.json':'tools/github-auth-check/manifest.json',
  'index.lua':'tools/github-auth-check/index.lua','auth_check.lua':'tools/github-auth-check/auth_check.lua'}
-for name in ('sync_auth','sync_transport','sync_primitives','sync_config','sync','github_payload','buffer','documents'):
+for name in ('sync_auth','sync_credentials','sync_transport','sync_primitives','sync_config','sync','github_payload','buffer','documents'):
  files['domain/'+name+'.lua']='domain/'+name+'.lua'
 for target,source in files.items():
  data=(repo/source).read_bytes();dest=a.stage/target;dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(data)

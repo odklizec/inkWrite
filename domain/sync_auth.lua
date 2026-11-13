@@ -1,7 +1,8 @@
--- Direct GitHub App device flow. Secrets live only in this closure, never state/SD.
+-- GitHub App device flow, with optional consented app-private credential storage.
 local Transport=require('domain.sync_transport')
 local Sync=require('domain.sync')
 local Payload=require('domain.github_payload')
+local Credentials=require('domain.sync_credentials')
 local M={API_VERSION='2026-03-10',VERIFY_URL='https://github.com/login/device'}
 local int=Transport.integer
 local function login_ok(v)return type(v)=='string'and #v>0 and #v<=39 and not v:find('[^A-Za-z0-9-]')end
@@ -30,6 +31,8 @@ function M.new(config,primitives)
   local client_id,app_id,expected_login=config.client_id,config.app_id,config.login
   local scope={repo=config.scope.repo,branch=config.scope.branch}
   local narrowed_id=config.repository_id
+  local credentials=Credentials.new(config)
+  local saved_record,remember_error,saved=false,nil,false
   local owner,repo=scope.repo:match('^([^/]+)/(.+)$')
   local prefix='/repos/'..encode(owner)..'/'..encode(repo)
   local oauth=assert(Transport.new('https://github.com'))
@@ -52,10 +55,15 @@ function M.new(config,primitives)
     if not now or age(now,token_start)>=token_ms then stop('auth_required','session_expired');return false end
     return true
   end
-  local function failure(err)
+  local function failure(err,ctx)
     local next_state=(err=='no_network'or err=='timeout'or err=='io_error')and 'offline'
       or (err=='authorization_required'and 'auth_required'or 'error')
     stop(next_state,err)
+    local invalid={authorization_required=true,account_mismatch=true,installation_scope_mismatch=true,
+      repository_scope_mismatch=true,branch_mismatch=true,bad_refresh_token=true,expired_token=true}
+    if ctx and invalid[err]and ctx.state.github_sync_remember==true then
+      local ok,e=credentials:forget(ctx);saved=false;saved_record=nil;remember_error=ok and nil or e
+    end
   end
   local function response_error(res)
     if res.err then return res.err end
@@ -136,8 +144,101 @@ function M.new(config,primitives)
       end)
     end)
   end
-  function s:disconnect()http_status=nil;stop('disconnected',nil)end
+  local function epoch(ctx)
+    local t=Transport.call(ctx.clock,'now')
+    return type(t)=='table'and t.valid==true and int(t.epoch_sec,1,2147483647)and t.epoch_sec or nil
+  end
+  local function persist(ctx)
+    if ctx.state.github_sync_remember~=true then return true end
+    if not saved_record then saved=false;remember_error=remember_error or 'remember_requires_signin';return nil end
+    local ok,e=credentials:save(ctx,saved_record);saved=ok==true;remember_error=e;return ok
+  end
+  function s:remember(ctx)return persist(ctx)end
+  function s:forget(ctx)
+    self:disconnect();saved_record=nil;saved=false
+    local ok,e=credentials:forget(ctx);remember_error=e;return ok
+  end
+  function s:disconnect()http_status=nil;stop('disconnected',nil);saved_record=nil end
   s.pause=s.disconnect;s.cancel=s.disconnect
+  -- Cancel a document operation while preserving the RAM sign-in. System covers
+  -- do not destroy the VM; code exchange callbacks may safely resume afterwards.
+  function s:cancel_operation()
+    generation=generation+1;oauth:cancel();api:cancel();busy=false
+    state=verified and token and 'connected'or 'disconnected';reason=nil
+  end
+  local function accept_token(c,d,refreshing)
+    if type(d)~='table'or type(d.access_token)~='string'or #d.access_token>255 or not d.access_token:match('^ghu_[A-Za-z0-9]+$')
+      or d.token_type~='bearer'or d.scope~=''or not int(d.expires_in,61,28800)then failure('invalid_token_response',c);return end
+    local now=clock(c);if not now then failure('clock_unavailable',c);return end
+    token=d.access_token;token_start=now;token_ms=(d.expires_in-60)*1000
+    local wall=epoch(c);local pending
+    if wall and type(d.refresh_token)=='string'and #d.refresh_token<=255 and d.refresh_token:match('^ghr_[A-Za-z0-9]+$')
+      and int(d.refresh_token_expires_in,61,15897600)then
+      pending={access_token=token,refresh_token=d.refresh_token,issued_at=wall,
+        access_expires_at=wall+d.expires_in-60,refresh_expires_at=wall+d.refresh_token_expires_in-60}
+    end
+    if not pending then
+      saved_record=nil
+      if c.state.github_sync_remember==true then
+        remember_error=wall and 'refresh_unavailable'or 'clock_unavailable'
+        if refreshing then credentials:forget(c);saved=false end
+      end
+    end
+    d.access_token=nil;d.refresh_token=nil;device_code=nil;user_code=nil;code_start=nil
+    if refreshing and pending and saved_record then
+      pending.account_id=saved_record.account_id;pending.verified_repository_id=saved_record.verified_repository_id
+      saved_record=credentials:record(pending)
+      -- Rotation invalidates the old refresh token. Commit the replacement
+      -- before optional verification requests can fail while offline.
+      persist(c)
+    end
+    state='verifying';busy=true
+    validate_access(c,function(c2,ok,err)
+      busy=false;if not ok then failure(err,c2);return end
+      if pending then
+        pending.account_id=account_id;pending.verified_repository_id=repository_id
+        saved_record=credentials:record(pending)
+      end
+      if not refreshing then persist(c2)end
+      state='connected';reason=nil
+      if c2.invalidate then c2:invalidate()end
+    end)
+  end
+  function s:restore(ctx)
+    if busy then return nil,'busy'end
+    if ctx.state.github_sync_remember~=true then return false end
+    local record,e=credentials:load(ctx)
+    if not record then
+      saved=false;remember_error=e
+      if e then state='error';reason=e end
+      return record,e
+    end
+    local wall,now=epoch(ctx),clock(ctx)
+    if not wall or not now or wall<record.issued_at then state='error';reason='clock_unavailable';return nil,reason end
+    stop('verifying',nil);saved_record=record;saved=true;remember_error=nil
+    account_id=record.account_id;repository_id=record.verified_repository_id
+    if record.refresh_expires_at<=wall then failure('expired_token',ctx);return nil,'expired_token'end
+    busy=true
+    if record.access_expires_at>wall then
+      token=record.access_token;token_start=now;token_ms=(record.access_expires_at-wall)*1000
+      validate_access(ctx,function(c,ok,why)
+        busy=false;if not ok then failure(why,c);return end
+        state='connected';reason=nil;if c.invalidate then c:invalidate()end
+      end)
+    else
+      state='refreshing'
+      send(ctx,oauth,{path='/login/oauth/access_token',method='POST',response_limit=4096,
+        headers={Accept='application/json',['Content-Type']='application/x-www-form-urlencoded',['User-Agent']='inkWrite'},
+        body='client_id='..encode(client_id)..'&grant_type=refresh_token&refresh_token='..encode(record.refresh_token)},function(c,res)
+          busy=false
+          if res.err or res.status~=200 then failure(response_error(res),c);return end
+          local data=res.data
+          if data.error then failure(data.error=='bad_refresh_token'and 'bad_refresh_token'or 'authorization_required',c);return end
+          accept_token(c,data,true)
+        end)
+    end
+    return true
+  end
   function s:status(ctx)
     if token then valid_token(ctx)end
     if device_code then
@@ -146,12 +247,13 @@ function M.new(config,primitives)
     end
     return {state=state,reason=reason,http_status=http_status,busy=busy,connected=verified and token~=nil,
       login=verified and expected_login or nil,repo=scope.repo,branch=scope.branch,
-      user_code=user_code,verification_uri=user_code and M.VERIFY_URL or nil}
+      user_code=user_code,verification_uri=user_code and M.VERIFY_URL or nil,
+      remembered=saved,remember_error=remember_error}
   end
   function s:start(ctx)
     if busy then return nil,'busy'end
     if token then return nil,'disconnect_first'end
-    http_status=nil;stop('requesting_code',nil);local now=clock(ctx)
+    http_status=nil;remember_error=nil;stop('requesting_code',nil);local now=clock(ctx)
     if not now then failure('clock_unavailable');return nil,'clock_unavailable'end
     busy=true;code_start=now
     send(ctx,oauth,{path='/login/device/code',method='POST',response_limit=4096,
@@ -197,16 +299,7 @@ function M.new(config,primitives)
           local errors={access_denied=true,expired_token=true,token_expired=true,device_flow_disabled=true,incorrect_client_credentials=true}
           failure(errors[d.error]and d.error or 'authorization_failed');return
         end
-        if type(d.access_token)~='string'or #d.access_token>255 or not d.access_token:match('^ghu_[A-Za-z0-9]+$')
-          or d.token_type~='bearer'or d.scope~=''or not int(d.expires_in,61,28800)then failure('invalid_token_response');return end
-        token=d.access_token;token_start=now;token_ms=(d.expires_in-60)*1000
-        -- Never retain refresh_token or expose the access token in public status.
-        d.access_token=nil;d.refresh_token=nil;device_code=nil;user_code=nil;code_start=nil
-        state='verifying';busy=true
-        validate_access(c,function(_,ok,err)
-          busy=false;if not ok then failure(err);return end
-          state='connected';reason=nil
-        end)
+        accept_token(c,d,false)
       end)
     return true
   end
@@ -217,7 +310,7 @@ function M.new(config,primitives)
     if write and (not Sync.text_ok(bytes)or (sha~=nil and not Sync.hex_ok(sha,40)))then return nil,'invalid_document'end
     busy=true;state='verifying';reason=nil
     validate_access(ctx,function(c,ok,err)
-      if not ok then failure(err);done(c,nil,err);return end
+      if not ok then failure(err,c);done(c,nil,err);return end
       local path='documents/'..name
       local route=prefix..'/contents/documents/'..encode(name)
       local req={path=route..'?ref='..encode(scope.branch),method='GET',headers=headers(true),response_limit=49152}
@@ -237,7 +330,7 @@ function M.new(config,primitives)
         if not valid_token(c2)then done(c2,nil,'session_expired');return end
         if res.err or (res.status~=200 and res.status~=201 and not (not write and res.status==404))then
           local why=response_error(res)
-          if res.status==401 or (res.status==403 and res.err~='rate_limited')then failure(why)
+          if res.status==401 or (res.status==403 and res.err~='rate_limited')then failure(why,c2)
           else state=(why=='timeout'or why=='no_network'or why=='io_error')and 'offline'or 'error';reason=why end
           done(c2,nil,why);return
         end
@@ -269,11 +362,11 @@ function M.new(config,primitives)
     local function finish(c,rows,why)
       busy=false
       if not valid_token(c)then done(c,nil,'session_expired');return end
-      if why=='authorization_required'then failure(why)else state=rows and 'connected'or 'error';reason=why end
+      if why=='authorization_required'then failure(why,c)else state=rows and 'connected'or 'error';reason=why end
       done(c,rows,why)
     end
     validate_access(ctx,function(c,ok,why)
-      if not ok then failure(why);done(c,nil,why);return end
+      if not ok then failure(why,c);done(c,nil,why);return end
       get(c,prefix..'/git/trees/'..encode(scope.branch),function(c2,res)
         if res.err or res.status~=200 then finish(c2,nil,response_error(res));return end
         local tree,err=Payload.tree(res.data,128);if not tree then finish(c2,nil,err);return end

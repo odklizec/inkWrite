@@ -4,6 +4,7 @@ function M.host()
   local h={files={},writes=0,reads=0}
   h.ctx={json={encode=function(_,v)return Native.encode(v)end,decode=function(_,v)return Native.decode(v)end}}
   h.ctx.storage={
+    remove=function(_,name)if h.fail_remove then return nil,'io_error'end;h.files[name]=nil;return true end,
     size=function(_,name)if h.fail_read then return nil,'io_error'end;local b=h.files[name];return b and #b or nil,b and nil or 'not_found'end,
     read=function(_,name)h.reads=h.reads+1;if h.throw_read then error('private host message')end;if h.fail_read then return nil,'io_error'end;return h.files[name],h.files[name]and nil or 'not_found'end,
     write=function(_,name,bytes)

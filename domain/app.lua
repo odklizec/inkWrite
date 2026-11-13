@@ -4,7 +4,7 @@ local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
 local SyncUI=require('domain.sync_ui')
-local M={VERSION="1.0.7"}
+local M={VERSION="1.0.8"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 -- Typing pacing. None of these shorten the panel's own frame time; they keep
@@ -1365,7 +1365,7 @@ function M.pause(ctx)
 end
 function M.resume(ctx) A.right_alt=nil;A.layout_chord=nil;A.stats:resume(ctx);ctx.input:listen({keyboard=true}); refresh_layout(ctx);if A.sync then A.sync:resume(ctx)end; ctx:invalidate() end
 function M.leave(ctx)
-  if A and A.sync then A.sync:pause(ctx)end
+  if A and A.sync then A.sync:leave(ctx)end
   if A and A.prepare_timer then A.prepare_timer:cancel();A.prepare_timer=nil end
   if A and A.stats then A.stats:pause(ctx) end
   if A and A.file_job then A.file_job:cancel();A.file_job=nil end

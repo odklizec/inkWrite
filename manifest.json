@@ -1,7 +1,7 @@
 {
   "app_id": "inkwrite",
   "display_name": "inkWrite",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "api": "2.18",
   "permissions": ["net"],
   "entry": "index.lua",

@@ -69,10 +69,9 @@ The client then verifies your account, App permissions, private repo and branch
 before allowing document operations. It rechecks access before each operation.
 See [GitHub's device-flow documentation](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app).
 
-The access token stays in RAM. Refresh tokens are discarded. Disconnect, pause,
-lock, exit or token expiry clears the local session; reconnect afterward. Memory
-release is not a promise of cryptographic memory erasure. Nothing is saved as a
-device credential. GitHub and repository collaborators can read uploaded files.
+Build 1.0.8 offers **Remember connection on this device** with explicit consent before saving reusable access/refresh credentials in app-private, unencrypted SD storage. A person with access to the card can recover them. Without this option, credentials remain in RAM. Temporary system covers preserve the RAM session and pending code; true exit clears RAM. **Forget saved connection** removes the credential file and disconnects; **Disconnect for now** ends the current RAM session but keeps an opted-in saved connection for next launch. GitHub-side revocation remains available. GitHub and repository collaborators can read uploaded files.
+
+Keep expiring tokens enabled. GitHub now documents refresh without a client secret for tokens created via device flow. Do not send or embed an App secret, disable expiration, or create a permanent token for this correction. See [1.0.8 connection notes](GITHUB-CONNECTION-1.0.8.md).
 
 Disconnect only forgets the device session. To revoke the GitHub grant, open
 GitHub Settings → Applications → Authorized GitHub Apps and revoke the App.

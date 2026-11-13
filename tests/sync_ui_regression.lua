@@ -54,6 +54,13 @@ for _,dims in ipairs({{480,800},{800,480}})do
   App.input(c,{type='key',key='ok',phase='down'})
   check(c.state.github_sync_enabled==false,'Classic OK activates row once')
   check(calls==0,'no implicit background requests')
+  a.sync.focus=7;key('Enter')
+  check(a.sync.page=='remember'and a.sync.focus==1 and c.state.github_sync_remember~=true,'Remember requires confirmation, default Cancel')
+  labels={};drawing=true;App.draw(c,g);drawing=false
+  check(labels['Save GitHub login unencrypted on SD.\nAnyone with the card can recover it.']~=nil,'credential-storage risk remains visible in portrait/landscape and tall fonts')
+  key('Enter');check(c.state.github_sync_remember~=true and a.sync.page=='main','Cancel does not enable persistence')
+  a.sync.focus=7;key('Enter');key('ArrowDown');key('Enter')
+  check(c.state.github_sync_remember==true and calls==0,'only explicit Remember consent enables future persistence; no network is started')
  end
 end
 return n

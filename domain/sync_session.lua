@@ -9,6 +9,7 @@ local M={}
 function M.new(hooks,dependencies)
   local d=dependencies or {};local config=d.config or Config
   local auth,p,serial=nil,nil,0
+  local reconnect_allowed=true
   local s={notice='Manual sync. Local saves stay on the SD card.',rows={},busy=false}
   local function notify(ctx,text)s.notice=text;ctx:invalidate()end
   local function wifi(ctx,ms)if ctx.net and ctx.net.keep_wifi then pcall(ctx.net.keep_wifi,ctx.net,ms)end end
@@ -21,16 +22,43 @@ function M.new(hooks,dependencies)
     return true
   end
   function s:status(ctx)
-    return auth and auth:status(ctx)or {state='disconnected',connected=false}
+    local status=auth and auth:status(ctx)or {state='disconnected',connected=false}
+    if status.connected and (self.notice=='Reconnecting with saved connection...'
+      or self.notice=='Open github.com/login/device and enter the code.')then self.notice='Connected. Ready for manual sync.'end
+    return status
+  end
+  function s:open(ctx)
+    if reconnect_allowed and ctx.state.github_sync_enabled==true and ctx.state.github_sync_remember==true and ready(ctx)then
+      local status=auth:status(ctx)
+      if not status.connected and not status.busy and not status.user_code then self:connect(ctx)end
+    end
+  end
+  function s:remember(ctx)
+    reconnect_allowed=true
+    ctx.state.github_sync_remember=true
+    if ready(ctx)and auth:status(ctx).connected and auth:remember(ctx)then notify(ctx,'Connection remembered on this device.')
+    else notify(ctx,'Remember enabled. Connect once to save the connection.')end
+  end
+  function s:forget(ctx)
+    serial=serial+1;self.busy=false;self.conflict=nil;self.rows={}
+    local ok=ready(ctx)and auth:forget(ctx)
+    if ok then ctx.state.github_sync_remember=false end
+    wifi(ctx,0);notify(ctx,ok and 'Connection forgotten. Sign in again to connect.'or 'Could not remove saved connection. Retry Forget before using sync.')
   end
   function s:disconnect(ctx)
+    reconnect_allowed=false
     serial=serial+1;self.busy=false;self.conflict=nil;self.rows={}
     if auth then auth:disconnect()end;wifi(ctx,0);notify(ctx,'Disconnected. Session cleared.')
   end
   function s:connect(ctx)
+    reconnect_allowed=true
     if ctx.state.github_sync_enabled~=true then notify(ctx,'Enable GitHub sync first.');return end
     if not ready(ctx)then return end
-    wifi(ctx,30000);local ok=auth:start(ctx)
+    wifi(ctx,30000)
+    local restored,why=auth:restore(ctx)
+    if restored then notify(ctx,'Reconnecting with saved connection...');return end
+    if restored==nil then notify(ctx,why=='clock_unavailable'and 'Set the device time, then retry connecting.'or 'Saved connection unavailable. Retry or Forget and sign in again.');return end
+    local ok=auth:start(ctx)
     notify(ctx,ok and 'Open github.com/login/device and enter the code.'or 'Connection unavailable. Disconnect and retry.')
   end
   function s:poll(ctx)if auth then auth:poll(ctx)end end
@@ -147,9 +175,20 @@ function M.new(hooks,dependencies)
     if not ok then failed(ctx,id,e)end
   end
   function s:close(ctx)
-    local status=self:status(ctx)
-    if self.busy or status.busy or not status.connected then self:disconnect(ctx)end
+    self:pause(ctx)
     self.rows={};self.conflict=nil;wifi(ctx,0)
+  end
+  function s:pause(ctx)
+    if self.busy then
+      serial=serial+1;self.busy=false;self.conflict=nil
+      if auth then auth:cancel_operation()end
+      notify(ctx,'Transfer interrupted. Recheck before retrying.')
+    end
+    wifi(ctx,0)
+  end
+  function s:leave(ctx)
+    serial=serial+1;self.busy=false
+    if auth then auth:disconnect()end;wifi(ctx,0)
   end
   return s
 end

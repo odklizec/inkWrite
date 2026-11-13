@@ -1,3 +1,5 @@
+> Build 1.0.7 historical behavior below. Build 1.0.8 adds opt-in remembered connections and automatic refresh, and preserves pending codes across system covers. See [the correction](GITHUB-CONNECTION-1.0.8.md) for current behavior.
+
 # Phase 3 — manual upload and download
 
 Build 1.0.7, development project inkWrite GitHub Sync Phase 0. The owner's existing App/public identifiers and selected private repo odklizec/inkwrite-docs, branch main, remain configured. No secret is stored in source, state, private files or public files. The owner reported Phase 2 device sign-in working; this does not prove document transfers.
