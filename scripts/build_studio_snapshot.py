@@ -15,6 +15,9 @@ RUNTIME = {
     'index.lua', 'keyboard.lua', 'manifest.json',
     'domain/app.lua', 'domain/buffer.lua', 'domain/documents.lua',
     'domain/layout.lua', 'domain/stats.lua',
+    'domain/sync.lua', 'domain/sync_metadata.lua', 'domain/sync_auth.lua',
+    'domain/sync_config.lua', 'domain/sync_transport.lua', 'domain/sync_primitives.lua',
+    'domain/github_payload.lua', 'domain/sync_session.lua', 'domain/sync_ui.lua',
 }
 
 
@@ -40,10 +43,11 @@ def build(repo, template, archive, stage):
     # This is a shipping boundary check, not a simulated firmware check.
     active_lua = {n for n in contents if n.endswith('.lua')}
     assert active_lua == RUNTIME - {'manifest.json'}, active_lua
-    assert 'net' not in manifest.get('permissions', [])
+    assert manifest.get('permissions') == ['net']
     for name in active_lua:
         text = contents[name].decode('utf-8')
-        assert 'ctx.net' not in text, name
+        if 'ctx.net' in text:
+            assert name in {'domain/sync_transport.lua', 'domain/sync_session.lua'}, name
         for module in re.findall(r'require\(["\']([^"\']+)["\']\)', text):
             assert module.replace('.', '/') + '.lua' in active_lua, (name, module)
     assert len(contents) == len(names) + 1, 'cloud path collision'

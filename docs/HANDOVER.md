@@ -1,3 +1,7 @@
+## 1.0.7 — Phase 3 manual GitHub sync
+
+Owner reported Phase 2 standalone device sign-in/private-repo authorization working. This is owner evidence, not upload/download/revocation/power-loss evidence. Phase 3 now imports the validated core, metadata, transport and RAM-only auth into the editor. Settings > More > GitHub sync provides explicit opt-in, connect/disconnect, manual upload, bounded remote listing and download-as-copy; touch and Classic/keyboard routes share geometry. No auto-sync. Existing document/buffer/selection/recovery remain separate. See GITHUB-SYNC-PHASE3.md for limits, verification and acceptance instructions. Desktop 18/18 suites pass (14,660 assertions); native synthetic Pro touch and Classic buttons reach the sync panel without runtime fault or Problems diagnostics. Transfers/hardware remain NOT TESTED. Latest website access failed; verified public contract is still 2.18 (see XTAPP-API-REVIEW-2026-11-13.md).
+
 ## Phase 2 public setup and separate sign-in diagnostic
 
 Owner supplied public Client ID/App ID, login and docs repo/main. Configured

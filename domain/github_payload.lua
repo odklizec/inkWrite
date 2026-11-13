@@ -1,6 +1,33 @@
 -- Pure GitHub Contents representation boundary; no URLs, credentials or HTTP I/O.
 local Sync=require('domain.sync')
 local M={}
+function M.tree(payload,maximum)
+  if type(payload)~='table'or payload.truncated~=false or not Sync.hex_ok(payload.sha,40)
+    or type(payload.tree)~='table'then return nil,'invalid_tree'end
+  local n=0
+  for k,v in pairs(payload.tree)do
+    n=n+1
+    if n>maximum or type(k)~='number'or k%1~=0 or k<1 or k>maximum or type(v)~='table'then return nil,'directory_too_large'end
+  end
+  for i=1,n do if type(payload.tree[i])~='table'then return nil,'invalid_tree'end end
+  return payload.tree
+end
+function M.directory(payload)
+  local tree,err=M.tree(payload,128);if not tree then return nil,err end
+  local rows,names={},{}
+  for _,entry in ipairs(tree)do
+    if entry.type=='blob'and (entry.mode=='100644'or entry.mode=='100755')and Sync.name_ok(entry.path)then
+      if not Sync.hex_ok(entry.sha,40)or type(entry.size)~='number'or entry.size%1~=0 or entry.size<0 then return nil,'invalid_tree'end
+      if entry.size<=32768 then
+        if names[entry.path:lower()]then return nil,'duplicate_filename'end
+        names[entry.path:lower()]=true;rows[#rows+1]={name=entry.path,sha=entry.sha,size=entry.size}
+        if #rows>64 then return nil,'directory_too_large'end
+      end
+    end -- Never offer directories, symlinks or submodules as documents.
+  end
+  table.sort(rows,function(a,b)return a.name<b.name end)
+  return rows
+end
 function M.read(status,payload,path,codec)
   if not Sync.path_ok(path)then return nil,'invalid_path'end
   if type(codec)~='table'or type(codec.encode)~='function'or type(codec.decode)~='function'then return nil,'invalid_codec'end

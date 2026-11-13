@@ -80,7 +80,7 @@ function M.new(config,primitives)
   end
   local function get(ctx,path,fn)
     if not valid_token(ctx)then fn(ctx,{err='session_expired'});return end
-    send(ctx,api,{path=path,method='GET',headers=headers(true),response_limit=16384},fn)
+    send(ctx,api,{path=path,method='GET',headers=headers(true),response_limit=49152},fn)
   end
   local function validate_access(ctx,done)
     get(ctx,'/user',function(c,r)
@@ -210,7 +210,7 @@ function M.new(config,primitives)
       end)
     return true
   end
-  local function operation(ctx,name,done,write,bytes,sha)
+  local function operation(ctx,name,done,write,bytes,sha,expected_sha,before_write)
     if type(done)~='function'or not Sync.name_ok(name)then return nil,'invalid_argument'end
     if busy then return nil,'busy'end
     if not verified or not valid_token(ctx)then return nil,'authorization_required'end
@@ -223,6 +223,7 @@ function M.new(config,primitives)
       local req={path=route..'?ref='..encode(scope.branch),method='GET',headers=headers(true),response_limit=49152}
       local fingerprint
       if write then
+        if before_write and before_write(c)~=true then busy=false;state='connected';done(c,nil,'local_changed');return end
         Transport.call(c.budget,'extend')
         fingerprint=Sync.digest(primitives.hash,bytes)
         local data=Payload.write_request(scope,path,bytes,sha,primitives.codec)
@@ -242,15 +243,57 @@ function M.new(config,primitives)
         end
         local result,why
         if write then result,why=Payload.written(res.status,res.data,path,fingerprint)
-        else result,why=Payload.read(res.status,res.data,path,primitives.codec)end
+        else
+          result,why=Payload.read(res.status,res.data,path,primitives.codec)
+          if result and expected_sha and (not result.exists or result.sha~=expected_sha)then result=nil;why='remote_changed'end
+        end
         state=result and 'connected'or 'error';reason=why
         done(c2,result,why)
       end)
     end)
     return true
   end
-  function s:read(ctx,name,done)return operation(ctx,name,done,false)end
-  function s:write(ctx,name,bytes,sha,done)return operation(ctx,name,done,true,bytes,sha)end
+  function s:read(ctx,name,done,expected_sha)
+    if expected_sha~=nil and not Sync.hex_ok(expected_sha,40)then return nil,'invalid_revision'end
+    return operation(ctx,name,done,false,nil,nil,expected_sha)
+  end
+  function s:write(ctx,name,bytes,sha,done,before_write)
+    if before_write~=nil and type(before_write)~='function'then return nil,'invalid_guard'end
+    return operation(ctx,name,done,true,bytes,sha,nil,before_write)
+  end
+  function s:list(ctx,done)
+    if type(done)~='function'then return nil,'invalid_callback'end
+    if busy then return nil,'busy'end
+    if not verified or not valid_token(ctx)then return nil,'authorization_required'end
+    busy=true;state='verifying';reason=nil
+    local function finish(c,rows,why)
+      busy=false
+      if not valid_token(c)then done(c,nil,'session_expired');return end
+      if why=='authorization_required'then failure(why)else state=rows and 'connected'or 'error';reason=why end
+      done(c,rows,why)
+    end
+    validate_access(ctx,function(c,ok,why)
+      if not ok then failure(why);done(c,nil,why);return end
+      get(c,prefix..'/git/trees/'..encode(scope.branch),function(c2,res)
+        if res.err or res.status~=200 then finish(c2,nil,response_error(res));return end
+        local tree,err=Payload.tree(res.data,128);if not tree then finish(c2,nil,err);return end
+        local folder
+        for _,entry in ipairs(tree)do
+          if entry.path=='documents'then
+            if folder or entry.type~='tree'or entry.mode~='040000'or not Sync.hex_ok(entry.sha,40)then finish(c2,nil,'invalid_documents_folder');return end
+            folder=entry.sha
+          end
+        end
+        if not folder then finish(c2,{});return end
+        get(c2,prefix..'/git/trees/'..folder,function(c3,r3)
+          if r3.err or r3.status~=200 then finish(c3,nil,response_error(r3));return end
+          if type(r3.data)~='table'or r3.data.sha~=folder then finish(c3,nil,'invalid_tree');return end
+          local rows,e=Payload.directory(r3.data);finish(c3,rows,e)
+        end)
+      end)
+    end)
+    return true
+  end
   return s
 end
 return M

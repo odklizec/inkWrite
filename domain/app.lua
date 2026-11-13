@@ -3,7 +3,8 @@ local Docs=require("domain.documents")
 local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
-local M={VERSION="1.0.6"}
+local SyncUI=require('domain.sync_ui')
+local M={VERSION="1.0.7"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 -- Typing pacing. None of these shorten the panel's own frame time; they keep
@@ -535,7 +536,7 @@ local function typography_rows()
     "Size: "..A.font_px.." px","Line spacing: +"..A.spacing.." px","Margins: "..A.margin.." px","Font settings"}
 end
 local function list_rows()
-  if A.view=="menu" then return {commands[6],commands[7],commands[8],"Statistics"} end
+  if A.view=="menu" then return {commands[6],commands[7],commands[8],"Statistics","GitHub sync"} end
   if A.view=="layouts" then
     local rows={"On-screen keyboard: "..(A.virtual and "On" or "Off")}
     for _,name in ipairs(Keyboard.names) do rows[#rows+1]=name end
@@ -581,7 +582,7 @@ end
 local function command(ctx,i)
   A.panel=nil;A.action_focus=nil;A.keyboard:reset()
   if A.message and A.message:sub(1,7)=="Accent:" then A.message=nil end
-  if A.blocked and i~=1 and i~=6 and i~=7 and i~=8 and i~=9 and i~=10 and i~=15 then
+  if A.blocked and i~=1 and i~=6 and i~=7 and i~=8 and i~=9 and i~=10 and i~=15 and i~=16 then
     message(ctx,"Existing files and recovery are protected"); return
   end
   if i==1 then A.view="editor"
@@ -607,10 +608,11 @@ local function command(ctx,i)
   if i==13 then new_document(ctx,true) end
   if i==15 then A.virtual=nil;A.view="statistics";A.stats_mode=A.stats_mode or 1;A.stats:tick(ctx,true) end
   if i==14 then A.view="layouts";A.focus=1 end
+  if i==16 then cancel_navigation();A.sync:open(ctx)end
   ctx:invalidate()
 end
 local function activate(ctx,i)
-  if A.view=="menu" then command(ctx,({6,7,8,15})[i])
+  if A.view=="menu" then command(ctx,({6,7,8,15,16})[i])
   elseif A.view=="layouts" then
     if i==1 then A.virtual=not A.virtual
     else
@@ -659,6 +661,17 @@ function M.load(ctx)
     if not ok then ctx.state.screen_orientation=nil end
   end
   A.ui_small=preferred_font(ctx,20);A.ui_medium=preferred_font(ctx,24);A.ui_large=preferred_font(ctx,30)
+  A.sync=SyncUI.new({
+    reserved_name=function()return A.doc and A.doc.name end,
+    can_import=function()return not A.blocked end,
+    snapshot=function(c,save_first)
+      if A.blocked or not A.doc then return nil end
+      if save_first and (A.dirty or A.doc.base==nil)and not save(c)then return nil end
+      if A.dirty or A.doc.base==nil then return nil end
+      local bytes=A.buffer:text()
+      if bytes~=A.doc.base or Docs.read(c,A.doc.name)~=bytes then return nil end
+      return {identity=A.doc,name=A.doc.name,revision=A.buffer.revision,bytes=bytes,saved=true,exists=true}
+    end},A.ui_small,A.ui_medium)
   A.font_name="";A.font_px=A.large and 30 or 24
   A.spacing=(ctx.state.spacing==4 or ctx.state.spacing==14) and ctx.state.spacing or 8
   A.margin=(ctx.state.margin==40 or ctx.state.margin==56) and ctx.state.margin or 24
@@ -1062,6 +1075,7 @@ local function virtual_press(ctx,label)
   ctx:invalidate()
 end
 function M.input(ctx,ev)
+  if A.sync and A.sync.active then return A.sync:input(ctx,ev)end
   if A.file_job or A.file_dialog then return true end
   if ev.type=="pointer" and (type(ev.x)~="number" or type(ev.y)~="number" or ev.x~=ev.x or ev.y~=ev.y or ev.x<0 or ev.y<0 or ev.x>=ctx.screen.width or ev.y>=ctx.screen.height) then return true end
   -- Notices belong to the action that produced them. Dismiss on the next
@@ -1308,6 +1322,7 @@ function M.input(ctx,ev)
   return false
 end
 function M.tick(ctx)
+  if A.sync and A.sync.active then A.sync:tick(ctx);return end
   -- The idle tick is the only place the statistics checkpoint and autosave may
   -- write to SD, so a burst of typing never waits for a file write.
   local t=now(ctx)
@@ -1333,6 +1348,7 @@ local function checkpoint_recovery(ctx)
   return false
 end
 function M.pause(ctx)
+  if A.sync then A.sync:pause(ctx)end
   A.right_alt=nil;A.layout_chord=nil
   extend_budget(ctx)
   if A.prepare_timer then A.prepare_timer:cancel();A.prepare_timer=nil end
@@ -1347,8 +1363,9 @@ function M.pause(ctx)
     if not checkpoint_recovery(ctx) then A.save_failed=true; A.message="Recovery write failed" end
   end
 end
-function M.resume(ctx) A.right_alt=nil;A.layout_chord=nil;A.stats:resume(ctx);ctx.input:listen({keyboard=true}); refresh_layout(ctx); ctx:invalidate() end
+function M.resume(ctx) A.right_alt=nil;A.layout_chord=nil;A.stats:resume(ctx);ctx.input:listen({keyboard=true}); refresh_layout(ctx);if A.sync then A.sync:resume(ctx)end; ctx:invalidate() end
 function M.leave(ctx)
+  if A and A.sync then A.sync:pause(ctx)end
   if A and A.prepare_timer then A.prepare_timer:cancel();A.prepare_timer=nil end
   if A and A.stats then A.stats:pause(ctx) end
   if A and A.file_job then A.file_job:cancel();A.file_job=nil end
@@ -1552,6 +1569,7 @@ local function editor_chrome(ctx,g,l)
 end
 function M.draw(ctx,g)
   if not A then return end
+  if A.sync and A.sync.active then A.sync:draw(ctx,g);return end
   local l=geometry(ctx); local f=font(ctx); local ui=A.ui_medium
   g:clear(0)
   if not frame_ready(l,f) then

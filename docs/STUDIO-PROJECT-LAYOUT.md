@@ -1,3 +1,9 @@
+# Studio project layout — Phase 3
+
+The development cloud project keeps its historical name **inkWrite GitHub Sync Phase 0** and ID e6d7a10b-8bdc-4f4c-bf77-1f5dfa1e5395. Phase 3 activates sixteen explicitly allowlisted Lua files: the original seven editor files plus sync core, metadata, auth, public config, HTTPS transport, primitives, GitHub payload validation, manual session controller and sync UI. The manifest now declares only `net` permission. Test/probe/diagnostic/tool code remains non-executable text under docs/development/, with DEVELOPMENT-SOURCE-MAP.json for restoring original paths.
+
+scripts/build_studio_snapshot.py checks the executable allowlist, static module closure and network ownership. It refuses existing stage directories. Do not import the complete repository as one Studio app: desktop tests and standalone diagnostics have separate roots. The released original cloud project remains separate. Historical details follow.
+
 # Studio project layout repair — 2026-11-12
 
 The first cloud snapshot incorrectly combined three source roots: the inkWrite

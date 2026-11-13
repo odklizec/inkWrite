@@ -4,18 +4,11 @@ For Studio imports use the corrected exporter described in
 [Studio project layout](docs/STUDIO-PROJECT-LAYOUT.md). Desktop tests and the
 separate diagnostic are stored there as text references, avoiding mixed app roots.
 
-GitHub document synchronization has a [phase 1 pure core](docs/GITHUB-SYNC-PHASE1.md)
-with conflict decisions, validated metadata and mock/failure tests. It is not yet
-connected to the editor; writing remains local-only. See the [API/storage audit](docs/GITHUB-SYNC-AUDIT.md),
-[proposed transport/auth decision](docs/ADR-0001-GITHUB-SYNC-TRANSPORT-AUTH.md)
-and [separate synthetic HTTPS probe](tools/github-sync-probe/README.md).
-The [Phase 2 Direct GitHub implementation](docs/GITHUB-SYNC-PHASE2.md) adds bounded
-transport and memory-only device authorization. Follow [GitHub App setup](docs/GITHUB-APP-SETUP.md)
-before live tests; App setup, real-network verification and editor integration remain pending.
-The original cloud baseline's inconsistent version labels are recorded in the
-audit. Current manifest and runtime version are 1.0.3.
+Development build **1.0.7** adds optional manual GitHub sync under **Settings → More → GitHub sync**. Local saving, autosave and recovery remain independent. Sync starts Off; enable it, connect with GitHub's device code, then explicitly upload a saved document or browse `documents/` and download a local copy. Downloads never open or replace the current document. Conflicts offer Cancel, upload under a new remote filename, or download as a separate local copy. Tokens live only in memory and are cleared on pause/exit/disconnect.
 
-A quiet writing and journaling app for Xteink X4Pro and X4Classic. Current development build: **1.0.3**. Requires compatible Gancao firmware with XTApp API 2.18 support.
+See [Phase 3 implementation and test instructions](docs/GITHUB-SYNC-PHASE3.md), [API review](docs/XTAPP-API-REVIEW-2026-11-13.md), [App setup](docs/GITHUB-APP-SETUP.md) and [Studio project layout](docs/STUDIO-PROJECT-LAYOUT.md). The owner reported the standalone Phase 2 sign-in test working; document transfers still need device acceptance.
+
+A quiet writing and journaling app for Xteink X4Pro and X4Classic. Requires compatible Gancao firmware with XTApp API 2.18 support.
 
 ## Start writing
 
@@ -63,7 +56,7 @@ Back from the normal editor or its header X opens the close dialog. Unsaved chan
 
 Save, power down the device, remove its SD card and copy `.md`/`.txt` files from `AppFiles/inkwrite/` using a card reader. Open them in a normal editor without conversion. Public documents survive app upgrades and uninstall; private recovery/preferences do not survive uninstall. Keep external file edits separate from editing in inkWrite.
 
-Wireless export is optional future work and is not required for manual retrieval.
+Optional manual GitHub transfers are available through Settings → More → GitHub sync. SD retrieval remains available offline.
 
 ## Keyboard shortcuts
 

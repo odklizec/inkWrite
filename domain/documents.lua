@@ -27,14 +27,15 @@ function M.read(ctx,name)
   if not Buffer.valid(s) then return nil,"Invalid UTF-8 or zero byte; original preserved" end
   return s
 end
-function M.fresh_name(ctx,prefix,extension)
+function M.fresh_name(ctx,prefix,extension,reserved)
   extension=extension or ".md"
   if extension~=".md" and extension~=".txt" then return nil,"Unsupported extension" end
   for i=1,512 do
     local name=prefix..string.format("-%03d",i)..extension
     local n,e=call(ctx.files,"size",name)
-    if n==nil and e=="not_found" then return name end
-    if n==nil then return nil,e end
+    if n==nil and e=="not_found" and (type(reserved)~='string'or name:lower()~=reserved:lower())then return name end
+    if n==nil and e=="not_found" then e=false end
+    if n==nil and e then return nil,e end
   end
   return nil,"No free filename; move older files off the SD card"
 end
@@ -68,6 +69,25 @@ function M.save(ctx,doc,text)
   -- A stale matching recovery is harmless and removed again on startup.
   call(ctx.storage,"remove","recovery.txt")
   return true
+end
+-- Remote import never replaces the active document or touches its recovery.
+function M.import_copy(ctx,name,text,reserved)
+  if not M.name_ok(name)or name:find('..',1,true)or not Buffer.valid(text)or #text>Buffer.MAX then return nil,'invalid_import'end
+  local size,err=call(ctx.files,'size',name)
+  if size==nil and err~='not_found'then return nil,'import_check_failed'end
+  local target=name
+  if size~=nil or (type(reserved)=='string'and name:lower()==reserved:lower())then
+    target,err=M.fresh_name(ctx,'download',name:lower():sub(-4)=='.txt'and '.txt'or '.md',reserved)
+    if not target then return nil,'import_name_failed'end
+  end
+  -- Recheck immediately before writing. The host has no exclusive-create/CAS.
+  size,err=call(ctx.files,'size',target)
+  if size~=nil or err~='not_found'then return nil,'import_destination_changed'end
+  local ok=call(ctx.files,'write',target,text)
+  if not ok then return nil,'import_write_failed'end
+  local verified=M.read(ctx,target)
+  if verified~=text then return nil,'import_verify_failed',target end
+  return target
 end
 -- No native rename exists. Copy and compare in 1 KiB timer slices, then remove.
 -- An interrupted/failed copy leaves the source intact, possibly alongside a copy.
