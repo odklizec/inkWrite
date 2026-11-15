@@ -11,6 +11,7 @@ function M.new(hooks,small,title,dependencies)
     if s.conflict and u.page~='conflict'then u.page='conflict';u.focus=1 end
     rows={{label='Back',action='back'}}
     if u.page=='main'then
+      rows={}
       rows[#rows+1]={label='GitHub sync: '..(ctx.state.github_sync_enabled==true and 'On'or 'Off'),action='toggle'}
       rows[#rows+1]={label=(status.connected or status.busy or status.user_code)and (ctx.state.github_sync_remember==true and 'Disconnect for now'or 'Disconnect')or 'Connect',action='connect'}
       rows[#rows+1]={label='Upload current saved document',action='upload'}

@@ -25,14 +25,14 @@ for _,dims in ipairs({{480,800},{800,480}})do
   a.view='menu';a.focus=5
   local buffer,doc=a.buffer,a.doc;a.buffer:seek(3);a.anchor=0;a.top=2;a.focus_mode=true
   key('Enter')
-  check(a.sync.active and a.sync.focus==1,'More > GitHub opens with Back selected')
+  check(a.sync.active and a.sync.focus==1,'More > GitHub opens with first setting selected')
   local labels={};local g=setmetatable({text_box=function(_,x,y,w,h,text,opts)
     check(x>=8 and x+w<=dims[1]-8 and y>=8 and y+h<=dims[2]-8,'all text boxes inside occlusion bounds')
     check(h>=opts.font.line_height,'text box contains a whole preferred-font line')
     labels[text]={x=x,y=y,w=w,h=h}
   end},{__index=function()return function()end end})
   drawing=true;App.draw(c,g);drawing=false
-  check(labels['GitHub sync: Off']~=nil,'sync disabled initially')
+  check(labels['GitHub sync: Off']~=nil and labels['Back']==nil,'main list starts with sync setting, without duplicate Back row')
   check(calls==0,'opening/drawing offline UI does not start networking')
   App.input(c,{type='text',text='unwanted typing'})
   check(a.buffer==buffer and a.buffer:text()=='Žluťoučký\r\n'and a.doc==doc and a.buffer.pos==3 and a.anchor==0 and a.top==2 and a.focus_mode,'overlay preserves document, selection, cursor, scroll and focus mode')
@@ -51,15 +51,16 @@ for _,dims in ipairs({{480,800},{800,480}})do
   key('Enter');check(a.sync.page=='main'and a.sync.session.conflict==nil,'Cancel leaves originals alone')
   App.input(c,{type='key',key='down',phase='down'})
   check(a.sync.focus==2,'Classic directional navigation')
+  App.input(c,{type='key',key='up',phase='down'})
   App.input(c,{type='key',key='ok',phase='down'})
   check(c.state.github_sync_enabled==false,'Classic OK activates row once')
   check(calls==0,'no implicit background requests')
-  a.sync.focus=7;key('Enter')
+  a.sync.focus=6;key('Enter')
   check(a.sync.page=='remember'and a.sync.focus==1 and c.state.github_sync_remember~=true,'Remember requires confirmation, default Cancel')
   labels={};drawing=true;App.draw(c,g);drawing=false
   check(labels['Save GitHub login unencrypted on SD.\nAnyone with the card can recover it.']~=nil,'credential-storage risk remains visible in portrait/landscape and tall fonts')
   key('Enter');check(c.state.github_sync_remember~=true and a.sync.page=='main','Cancel does not enable persistence')
-  a.sync.focus=7;key('Enter');key('ArrowDown');key('Enter')
+  a.sync.focus=6;key('Enter');key('ArrowDown');key('Enter')
   check(c.state.github_sync_remember==true and calls==0,'only explicit Remember consent enables future persistence; no network is started')
  end
 end
