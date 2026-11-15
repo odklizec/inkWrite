@@ -1,4 +1,4 @@
-# Simpler direct GitHub sync - 1.0.11
+# Simpler direct GitHub sync - 1.0.13
 
 The owner requested the suggestions from "Compare Draftling and inkWrite" (13 November 2026), then chose "Keep direct device sign-in; simplify setup without a hosted service". This supersedes the comparison's optional hosted companion suggestion.
 
