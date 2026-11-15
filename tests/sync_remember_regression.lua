@@ -48,7 +48,8 @@ a,h=setup(true);a:disconnect();a=assert(Auth.new(Host.config(),primitives));a:re
 h:verify(a,{[1]=function(v)v.login='another'end})
 check(not a:status(h.ctx).connected and h.private.files[Credentials.FILE]==nil,'wrong account on restore clears saved grant')
 a,h=setup(true);a:disconnect();a=assert(Auth.new(Host.config(),primitives));a:restore(h.ctx);h:respond({},401)
-check(not a:status(h.ctx).connected and h.private.files[Credentials.FILE]==nil,'401 on restored access token clears persisted grant')
+check(a:status(h.ctx).state=='refreshing'and h.private.files[Credentials.FILE]~=nil,'401 tries refresh before discarding a saved grant')
+h:respond(Host.token());h:verify(a);check(a:status(h.ctx).connected,'401 renewal restores access without browser approval')
 a,h=setup(true);raw=h.private.files[Credentials.FILE];h.epoch=h.epoch-1;a:disconnect();a=assert(Auth.new(Host.config(),primitives));count=h.calls
 check(a:restore(h.ctx)==nil and h.calls==count and h.private.files[Credentials.FILE]==raw,'backward/invalid clock does not extend credentials or delete them')
 h.ctx.clock.now=function()return {valid=false}end
@@ -74,13 +75,13 @@ local u=UI.new({},font,font,{config=Host.config(),primitives=primitives,auth_fac
 local function press(code)u:input(h.ctx,{type='key',phase='down',code=code})end
 u:open(h.ctx);press('ArrowDown');press('ArrowDown');press('Enter');h:respond(Host.code());u:tick(h.ctx)
 local drawn={};local g=setmetatable({text_box=function(_,x,y,w,z,text)drawn[text]=true end},{__index=function()return function()end end})
-u:draw(h.ctx,g);check(drawn['Sign-in code: ABCD-EFGH']and drawn['github.com/login/device'],'sign-in code has a dedicated full visible line')
+u:draw(h.ctx,g);check(drawn['Sign-in code: ABCD-EFGH\nApprove the App in your browser.']and drawn['github.com/login/device'],'sign-in code has a dedicated full visible line')
 u:pause(h.ctx);u:resume(h.ctx);drawn={};u:draw(h.ctx,g)
-check(drawn['Sign-in code: ABCD-EFGH']and captured:status(h.ctx).user_code=='ABCD-EFGH','temporary system cover no longer clears sign-in code')
+check(drawn['Sign-in code: ABCD-EFGH\nApprove the App in your browser.']and captured:status(h.ctx).user_code=='ABCD-EFGH','temporary system cover no longer clears sign-in code')
 u:leave(h.ctx);check(captured:status(h.ctx).user_code==nil,'actual exit clears incomplete code flow from RAM')
 u=UI.new({},font,font,{config=Host.config(),primitives=primitives});u:open(h.ctx);press('ArrowDown');press('ArrowDown');press('Enter')
 local code=Host.code();code.user_code='WXYZ-1234';h:respond(code);u:tick(h.ctx);drawn={};u:draw(h.ctx,g)
-check(drawn['Sign-in code: WXYZ-1234']and not drawn['Sign-in code: ABCD-EFGH'],'second app instance displays fresh code rather than cached old header')
+check(drawn['Sign-in code: WXYZ-1234\nApprove the App in your browser.']and not drawn['Sign-in code: ABCD-EFGH\nApprove the App in your browser.'],'second app instance displays fresh code rather than cached old header')
 -- Session restore is lazy: opening writing remains network-free, opening sync restores.
 a,h=setup(true);a:disconnect();count=h.calls
 local session=Session.new({}, {config=Host.config(),primitives=primitives})

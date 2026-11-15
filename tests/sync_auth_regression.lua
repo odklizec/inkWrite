@@ -124,7 +124,7 @@ a,b=connect();b.time=5000+(28800-60)*1000
 check(a:status(b.ctx).reason=='session_expired'and not a:status(b.ctx).connected,'token expires conservatively before server deadline')
 for _,status_code in ipairs({401,403})do
  a,b=connect();a:read(b.ctx,'ideas.md',function(_,v,e)got=v;why=e end);b:verify(a);b:respond({},status_code)
- check(got==nil and why=='authorization_required'and not a:status(b.ctx).connected,'authorization failure clears grant '..status_code)
+ check(got==nil and why==(status_code==401 and 'authorization_required'or 'access_forbidden')and not a:status(b.ctx).connected,'authorization failure blocks RAM grant '..status_code)
 end
 a,b=connect();a:read(b.ctx,'ideas.md',function(_,v,e)got=v;why=e end);b:verify(a)
 b:respond({},403,{headers={['x-ratelimit-remaining']='0'}})

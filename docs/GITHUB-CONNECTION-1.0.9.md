@@ -1,0 +1,23 @@
+# Reconnect and approval QR — 1.0.9
+
+A saved GitHub connection should work after a day or two. GitHub access tokens expire after eight hours; the saved device-flow refresh token lasts about six months and rotates on successful renewal. The app can renew when next opened without running while closed. Months of inactivity, GitHub-side revocation, Forget, lost storage or an interrupted/lost refresh response can still require approval. A connection cannot be guaranteed indefinitely. Expiring tokens remain enabled; no App secret, permanent token or new service is introduced.
+
+## Correction
+
+The prior restore path treated API rejection of an access token as revocation of the entire grant. Now, if a saved access token is rejected with 401, restore attempts exactly one refresh using the still-saved refresh token. It rechecks the account, App, private repository and branch afterwards. No document request is automatically replayed. Repeated rejection stops rather than looping. Generic 403 and unknown OAuth/configuration errors preserve the saved grant for retry. Explicit bad/expired refresh tokens and account/repository scope mismatches still fail closed. This fixes a concrete recovery path; the owner's exact device failure remains unconfirmed.
+
+Use the full writer: Settings > More > GitHub sync > Remember connection on this device. The separate inkWrite GitHub sign-in check is a diagnostic and deliberately does not remember login. The quoted approval wording also appears there, so confirm which app was tested before attributing a diagnostic reapproval to the writer.
+
+## Approval fallback
+
+The sign-in URL, code and “Approve the App in your browser” text are followed by an offline QR. Scanning opens exactly https://github.com/login/device. Enter the displayed code on GitHub; the QR does not prefill it or automatically approve access. It contains no access token, refresh token, device code, private repository path or third-party redirect. The plain URL/code remain available. Cancel sign-in clears the pending flow and removes the QR. Authenticated and expired-code screens do not retain it.
+
+QR data is generated using qrcode 8.2 with medium error correction and a four-module quiet zone. The checked-in data has 37 modules including the quiet zone, rendered as 214 merged black runs plus a white backing rectangle, with whole-pixel scaling and bounded drawing commands. No runtime QR generation, network call or image allocation occurs in draw. Layout reserves space above Cancel/Back controls in portrait/landscape and with occlusion/tall preferred-font metrics.
+
+## Verification
+
+21/21 desktop suites pass: 15,647 assertions. Fresh Auth instances and reset monotonic clocks model reopening after 1, 2, 3 and 100 days. Tests cover expired access renewal, server rejection before local expiry, one-refresh bound, generic 403 and refresh configuration failure preserving saved authorization, explicitly revoked refresh rejection, QR bounds/command count and cancellation. Four rasterizations of the actual Lua QR draw commands (480x800/800x480, 24/44 line height) independently decode with zxing-cpp to the exact official GitHub URL. This is desktop/mock evidence, not device acceptance.
+
+Native Studio preview and cloud saving are blocked until the owner signs into XTApp Studio. No real credentials or private document files were accessed. Do not claim that the owner's multi-day physical-device issue is proven resolved. Requires compatible Gancao firmware supporting current API 2.26. User check: keep Remember enabled, reopen after >8 hours and >48 hours, expect automatic reconnect; when approval is genuinely required, scan the QR and enter the displayed code.
+
+Sources reviewed 15 November 2026: official XTApp public contract current minor 2.26 (00 General rules), 14 Networking (401/403 handled by client, asynchronous deadlines and one-request rule); GitHub refresh documentation https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/refreshing-user-access-tokens (eight-hour access, six-month refresh, no client_secret for device-flow refresh). No public canvas QR primitive was confirmed; the widget-layout QR node is a separate API and is not used here.

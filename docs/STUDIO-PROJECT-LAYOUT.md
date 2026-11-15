@@ -1,3 +1,5 @@
+Build 1.0.9 adds domain/approval_qr.lua to the shipping allowlist: **eighteen** executable Lua files. The QR is generated public-URL drawing data, with no credentials and no runtime QR library. scripts/build_approval_qr.py is a non-executable development reference.
+
 Build 1.0.8 adds domain/sync_credentials.lua to the shipping allowlist: **seventeen** executable Lua files. Credential data lives in app-private runtime storage and is never a source file, Studio backup input, fixture, log or repository artifact. The standalone sign-in diagnostic builder includes this required module but never enables persistence.
 
 # Studio project layout — Phase 3

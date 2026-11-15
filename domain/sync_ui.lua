@@ -1,5 +1,6 @@
 local Session=require('domain.sync_session')
 local Config=require('domain.sync_config')
+local ApprovalQR=require('domain.approval_qr')
 local M={}
 function M.new(hooks,small,title,dependencies)
   local s=Session.new(hooks,dependencies)
@@ -33,10 +34,12 @@ function M.new(hooks,small,title,dependencies)
       rows[1].label='Cancel'
       rows[#rows+1]={label='Remember on this device',action='consent'}
     end
+    local approving=status.user_code~=nil and u.page=='main'
+    if approving then rows={{label='Cancel sign-in',action='cancel_auth'}}end
     header={Config.scope.repo..' / '..Config.scope.branch,'Status: '..status.state:gsub('_',' '),s.notice}
     if status.user_code then
       header[2]='github.com/login/device'
-      header[3]='Sign-in code: '..status.user_code
+      header[3]='Sign-in code: '..status.user_code..'\nApprove the App in your browser.'
     elseif status.state=='requesting_code'then header[3]='Requesting a new sign-in code...'
     elseif status.state=='refreshing'then header[3]='Renewing saved connection...'
     elseif status.remember_error then
@@ -44,7 +47,7 @@ function M.new(hooks,small,title,dependencies)
       header[3]=errors[status.remember_error]or 'Saved connection unavailable. Retry or Forget.'
     elseif status.reason then
       local errors={code_expired='Code expired. Select Connect for a new code.',no_network='No network. Retry Connect.',server_error='GitHub request failed. Retry Connect.',expired_token='Saved authorization expired. Connect again.',
-        bad_refresh_token='Saved authorization expired or revoked. Connect again.',authorization_required='Authorization required. Connect again.',clock_unavailable='Set device time, then retry Connect.'}
+        bad_refresh_token='Saved authorization expired or revoked. Connect again.',authorization_required='Saved access rejected. Connect to renew it.',access_forbidden='GitHub refused access. Retry; saved login kept.',refresh_failed='Renewal failed. Retry Connect; saved login kept.',clock_unavailable='Set device time, then retry Connect.'}
       header[3]=errors[status.reason]or 'Connection failed. Retry Connect; check App setup.'
     end
     if u.page=='confirm'then header[3]='Download: '..u.selected.name end
@@ -56,9 +59,19 @@ function M.new(hooks,small,title,dependencies)
     local notice_lines=u.page=='remember'and 4 or 2
     local line=small.line_height+4;local top=y+title.line_height+8+line*(2+notice_lines)
     local rh=math.max(44,small.line_height+12)
+    local qr
+    if approving then
+      local available=math.min(w,bottom-top-50-rh-16,222)
+      local scale=math.floor(available/ApprovalQR.size)
+      if scale>=2 then
+        local size=ApprovalQR.size*scale
+        qr={x=x+(w-size)//2,y=top+4,size=size,scale=scale}
+        top=qr.y+size+12
+      end
+    end
     local per=math.max(1,(bottom-top-50)//rh)
     u.focus=math.max(1,math.min(#rows,u.focus))
-    geometry={x=x,y=y,w=w,bottom=bottom,top=top,row=rh,per=per,first=((u.focus-1)//per)*per+1,line=line,notice_lines=notice_lines}
+    geometry={x=x,y=y,w=w,bottom=bottom,top=top,row=rh,per=per,first=((u.focus-1)//per)*per+1,line=line,notice_lines=notice_lines,qr=qr}
     local next_key=table.concat({u.page,u.focus,status.state,status.user_code or '',tostring(status.busy),status.reason or '',status.remember_error or '',tostring(s.busy),s.notice,#rows,w,bottom},'|')
     if key~=next_key then key=next_key;ctx:invalidate()end
   end
@@ -72,7 +85,8 @@ function M.new(hooks,small,title,dependencies)
     local r=rows[index];if not r then return end
     if r.action=='back'then back(ctx);return end
     if s.busy then return end
-    if r.action=='toggle'then s:toggle(ctx)
+    if r.action=='cancel_auth'then s:disconnect(ctx);u.focus=1
+    elseif r.action=='toggle'then s:toggle(ctx)
     elseif r.action=='connect'then
       if status.connected or status.busy or status.user_code then s:disconnect(ctx)else s:connect(ctx)end
     elseif r.action=='upload'then s:upload(ctx)
@@ -131,6 +145,13 @@ function M.new(hooks,small,title,dependencies)
     for i,line in ipairs(header)do
       g:text_box(l.x,y,l.w,l.line*(i==3 and l.notice_lines or 1),line,{font=small,color=15,wrap='word',overflow='ellipsis'})
       y=y+l.line
+    end
+    if l.qr then
+      local q=l.qr
+      g:rect(q.x,q.y,q.size,q.size,{color=0,fill=true})
+      for _,r in ipairs(ApprovalQR.rects)do
+        g:rect(q.x+r[1]*q.scale,q.y+r[2]*q.scale,r[3]*q.scale,q.scale,{color=15,fill=true})
+      end
     end
     for i=l.first,math.min(#rows,l.first+l.per-1)do
       local ry=l.top+(i-l.first)*l.row

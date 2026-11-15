@@ -59,7 +59,7 @@ function M.new(config,primitives)
     local next_state=(err=='no_network'or err=='timeout'or err=='io_error')and 'offline'
       or (err=='authorization_required'and 'auth_required'or 'error')
     stop(next_state,err)
-    local invalid={authorization_required=true,account_mismatch=true,installation_scope_mismatch=true,
+    local invalid={account_mismatch=true,installation_scope_mismatch=true,
       repository_scope_mismatch=true,branch_mismatch=true,bad_refresh_token=true,expired_token=true}
     if ctx and invalid[err]and ctx.state.github_sync_remember==true then
       local ok,e=credentials:forget(ctx);saved=false;saved_record=nil;remember_error=ok and nil or e
@@ -67,7 +67,8 @@ function M.new(config,primitives)
   end
   local function response_error(res)
     if res.err then return res.err end
-    if res.status==401 or res.status==403 then return 'authorization_required'end
+    if res.status==401 then return 'authorization_required'end
+    if res.status==403 then return 'access_forbidden'end
     if res.status==409 or res.status==422 then return 'remote_race'end
     return 'request_failed'
   end
@@ -204,6 +205,22 @@ function M.new(config,primitives)
       if c2.invalidate then c2:invalidate()end
     end)
   end
+  local function refresh_saved(ctx,record)
+    token=nil;token_start=nil;token_ms=nil;verified=false
+    state='refreshing';busy=true
+    send(ctx,oauth,{path='/login/oauth/access_token',method='POST',response_limit=4096,
+      headers={Accept='application/json',['Content-Type']='application/x-www-form-urlencoded',['User-Agent']='inkWrite'},
+      body='client_id='..encode(client_id)..'&grant_type=refresh_token&refresh_token='..encode(record.refresh_token)},function(c,res)
+        busy=false
+        if res.err or res.status~=200 then failure(response_error(res),c);return end
+        local data=res.data
+        if data.error then
+          local invalid=data.error=='bad_refresh_token'or data.error=='expired_token'or data.error=='token_expired'
+          failure(invalid and 'bad_refresh_token'or 'refresh_failed',c);return
+        end
+        accept_token(c,data,true)
+      end)
+  end
   function s:restore(ctx)
     if busy then return nil,'busy'end
     if ctx.state.github_sync_remember~=true then return false end
@@ -222,20 +239,18 @@ function M.new(config,primitives)
     if record.access_expires_at>wall then
       token=record.access_token;token_start=now;token_ms=(record.access_expires_at-wall)*1000
       validate_access(ctx,function(c,ok,why)
-        busy=false;if not ok then failure(why,c);return end
+        busy=false
+        if not ok then
+          -- A rejected access token does not prove the refresh grant was revoked.
+          -- Try exactly one renewal, without replaying any document operation.
+          if why=='authorization_required'and http_status==401 then refresh_saved(c,record)
+          else failure(why,c)end
+          return
+        end
         state='connected';reason=nil;if c.invalidate then c:invalidate()end
       end)
     else
-      state='refreshing'
-      send(ctx,oauth,{path='/login/oauth/access_token',method='POST',response_limit=4096,
-        headers={Accept='application/json',['Content-Type']='application/x-www-form-urlencoded',['User-Agent']='inkWrite'},
-        body='client_id='..encode(client_id)..'&grant_type=refresh_token&refresh_token='..encode(record.refresh_token)},function(c,res)
-          busy=false
-          if res.err or res.status~=200 then failure(response_error(res),c);return end
-          local data=res.data
-          if data.error then failure(data.error=='bad_refresh_token'and 'bad_refresh_token'or 'authorization_required',c);return end
-          accept_token(c,data,true)
-        end)
+      refresh_saved(ctx,record)
     end
     return true
   end
