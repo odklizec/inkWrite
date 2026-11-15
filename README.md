@@ -4,7 +4,9 @@ For Studio imports use the corrected exporter described in
 [Studio project layout](docs/STUDIO-PROJECT-LAYOUT.md). Desktop tests and the
 separate diagnostic are stored there as text references, avoiding mixed app roots.
 
-Development build **1.0.10** adds optional manual GitHub sync under **Settings → More → GitHub sync**. Local saving, autosave and recovery remain independent. Sync starts Off; enable it, connect with GitHub's device code, then explicitly upload a saved document or browse `documents/` and download a local copy. Downloads never open or replace the current document. Conflicts offer Cancel, upload under a new remote filename, or download as a separate local copy. Choose **Remember connection on this device** to reconnect automatically across app restarts. It asks for consent before saving reusable credentials in app-private, unencrypted SD storage. Tokens renew without reopening the browser; **Forget saved connection** removes them. Without Remember, credentials remain in RAM. System covers preserve a pending sign-in code. Saved access rejected by GitHub now tries refresh before asking for browser approval; recoverable failures keep the saved grant. A QR code below the approval message opens GitHub directly when approval is required. See [reconnect and QR update](docs/GITHUB-CONNECTION-1.0.9.md).
+Development build **1.0.11** adds optional manual GitHub sync under **Settings > More > GitHub sync**. Choose **Sync this document** or press **Ctrl+G**: inkWrite checks the saved document and GitHub, then uploads local changes or offers **Update local document** when only GitHub changed. Updating asks first and keeps a verified `before-sync-###` local backup. Conflicts keep both originals and offer copies. File status distinguishes local changes, the last successful sync and detected remote changes.
+
+Direct GitHub device sign-in remains in use, with a QR code for approval. First connection offers **Remember and connect** or **Connect for this session only**. Remember requires consent to store reusable credentials unencrypted on the SD card; anyone with the card can recover them. Saved credentials can renew without browser approval while GitHub permits it. **Forget saved connection** removes them. No hosted service is required. Local save, autosave and recovery work independently. See [simpler sync workflow and test steps](docs/GITHUB-SYNC-1.0.11.md).
 
 See [Phase 3 implementation and test instructions](docs/GITHUB-SYNC-PHASE3.md), [API review](docs/XTAPP-API-REVIEW-2026-11-13.md), [App setup](docs/GITHUB-APP-SETUP.md) and [Studio project layout](docs/STUDIO-PROJECT-LAYOUT.md). The owner reported the standalone Phase 2 sign-in test working; document transfers still need device acceptance.
 
@@ -63,6 +65,7 @@ Optional manual GitHub transfers are available through Settings → More → Git
 | Shortcut | Action |
 | --- | --- |
 | Ctrl+S | Save |
+| Ctrl+G | Sync this document / open connection setup |
 | Ctrl+N | New dated Markdown document |
 | Ctrl+O | Open file |
 | Ctrl+J | Today's journal |

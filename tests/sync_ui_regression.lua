@@ -25,17 +25,18 @@ for _,dims in ipairs({{480,800},{800,480}})do
   a.view='menu';a.focus=5
   local buffer,doc=a.buffer,a.doc;a.buffer:seek(3);a.anchor=0;a.top=2;a.focus_mode=true
   key('Enter')
-  check(a.sync.active and a.sync.focus==1,'More > GitHub opens with first setting selected')
+  check(a.sync.active and a.sync.focus==1,'More > GitHub opens with Sync selected')
   local labels={};local g=setmetatable({text_box=function(_,x,y,w,h,text,opts)
     check(x>=8 and x+w<=dims[1]-8 and y>=8 and y+h<=dims[2]-8,'all text boxes inside occlusion bounds')
     check(h>=opts.font.line_height,'text box contains a whole preferred-font line')
     labels[text]={x=x,y=y,w=w,h=h}
   end},{__index=function()return function()end end})
   drawing=true;App.draw(c,g);drawing=false
-  check(labels['GitHub sync: Off']~=nil and labels['Back']==nil,'main list starts with sync setting, without duplicate Back row')
+  check(labels['Sync this document']~=nil and labels['Back']==nil,'main list starts with Sync, without duplicate Back row')
   check(calls==0,'opening/drawing offline UI does not start networking')
   App.input(c,{type='text',text='unwanted typing'})
   check(a.buffer==buffer and a.buffer:text()=='Žluťoučký\r\n'and a.doc==doc and a.buffer.pos==3 and a.anchor==0 and a.top==2 and a.focus_mode,'overlay preserves document, selection, cursor, scroll and focus mode')
+  a.sync.focus=3;App.tick(c);labels={};drawing=true;App.draw(c,g);drawing=false
   local r=labels['GitHub sync: Off']
   App.input(c,{type='pointer',phase='up',gesture='tap',x=r.x+2,y=r.y+2})
   check(c.state.github_sync_enabled==true,'shared touch row toggles explicit opt-in')
@@ -52,6 +53,7 @@ for _,dims in ipairs({{480,800},{800,480}})do
   App.input(c,{type='key',key='down',phase='down'})
   check(a.sync.focus==2,'Classic directional navigation')
   App.input(c,{type='key',key='up',phase='down'})
+  a.sync.focus=3
   App.input(c,{type='key',key='ok',phase='down'})
   check(c.state.github_sync_enabled==false,'Classic OK activates row once')
   check(calls==0,'no implicit background requests')
@@ -62,6 +64,10 @@ for _,dims in ipairs({{480,800},{800,480}})do
   key('Enter');check(c.state.github_sync_remember~=true and a.sync.page=='main','Cancel does not enable persistence')
   a.sync.focus=6;key('Enter');key('ArrowDown');key('Enter')
   check(c.state.github_sync_remember==true and calls==0,'only explicit Remember consent enables future persistence; no network is started')
+  App.input(c,{type='key',key='back',phase='up'});a.view='editor';c.state.github_sync_remember=false;c.state.github_sync_enabled=false
+  App.input(c,{type='key',source='keyboard',code='KeyG',phase='down',mods={ctrl=true}})
+  check(a.sync.active and a.sync.page=='connect'and a.buffer:text()==files['ideas.md']and calls==0,'Ctrl+G opens first-use Sync setup without typing into the document')
+
  end
 end
 return n

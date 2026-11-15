@@ -83,6 +83,14 @@ function M.decide(direction,local_file,remote,record,hash)
   if remote.sha==record.remote_blob_sha then return plan('conflict','metadata_inconsistent')end
   return plan('download_copy') -- Never a replace/delete instruction.
 end
+-- A single manual Sync may offer a protected remote-only local update.
+function M.reconcile(file,remote,record,hash)
+  local plan,err=M.decide('upload',file,remote,record,hash)
+  if plan and plan.action=='conflict'and plan.reason=='remote_changed'then
+    plan.action='update_local';plan.reason=nil;plan.fingerprint=record.last_synced_local_fingerprint
+  end
+  return plan,err
+end
 function M.error_state(status,err)
   if status==401 or status==403 then return 'auth_required','authorization_required'end
   if status==409 or status==422 then return 'conflict','remote_race'end

@@ -10,7 +10,7 @@ function M.new(hooks,dependencies)
   local d=dependencies or {};local config=d.config or Config
   local auth,p,serial=nil,nil,0
   local reconnect_allowed=true
-  local s={notice='Manual sync. Local saves stay on the SD card.',rows={},busy=false}
+  local s={notice='Manual sync. Local saves stay on the SD card.',rows={},busy=false,file_status='Saved locally'}
   local function notify(ctx,text)s.notice=text;ctx:invalidate()end
   local function wifi(ctx,ms)if ctx.net and ctx.net.keep_wifi then pcall(ctx.net.keep_wifi,ctx.net,ms)end end
   local function ready(ctx)
@@ -27,7 +27,30 @@ function M.new(hooks,dependencies)
       or self.notice=='Open github.com/login/device and enter the code.')then self.notice='Connected. Ready for manual sync.'end
     return status
   end
+  function s:refresh_file_status(ctx)
+    self.file_status='Saved locally'
+    if ctx.state.github_sync_enabled~=true then return end
+    p=p or d.primitives or Primitives.new(ctx)
+    if not p or type(hooks.snapshot)~='function'then return end
+    if ctx.budget then ctx.budget:extend()end
+    local file=hooks.snapshot(ctx,false)
+    if not file then
+      local info=hooks.describe and hooks.describe()
+      if info and info.dirty then self.file_status='Unsaved local changes'end
+      return
+    end
+    local fp=Sync.digest(p.hash,file.bytes)
+    local metadata=Store.load(ctx,config.scope,p.hash)
+    if not metadata then self.file_status='Saved locally; sync record unavailable';return end
+    local record=metadata.documents[file.name]
+    local known=self.remote_change
+    if known and known.identity==file.identity and known.name==file.name and known.fingerprint==fp then
+      self.file_status='Remote changes found'
+    elseif record and record.last_synced_local_fingerprint==fp then self.file_status='Up to date at last sync'
+    else self.file_status='Changes waiting to upload'end
+  end
   function s:open(ctx)
+    self:refresh_file_status(ctx)
     if reconnect_allowed and ctx.state.github_sync_enabled==true and ctx.state.github_sync_remember==true and ready(ctx)then
       local status=auth:status(ctx)
       if not status.connected and not status.busy and not status.user_code then self:connect(ctx)end
@@ -40,14 +63,14 @@ function M.new(hooks,dependencies)
     else notify(ctx,'Remember enabled. Connect once to save the connection.')end
   end
   function s:forget(ctx)
-    serial=serial+1;self.busy=false;self.conflict=nil;self.rows={}
+    serial=serial+1;self.busy=false;self.conflict=nil;self.pending_update=nil;self.rows={}
     local ok=ready(ctx)and auth:forget(ctx)
     if ok then ctx.state.github_sync_remember=false end
     wifi(ctx,0);notify(ctx,ok and 'Connection forgotten. Sign in again to connect.'or 'Could not remove saved connection. Retry Forget before using sync.')
   end
   function s:disconnect(ctx)
     reconnect_allowed=false
-    serial=serial+1;self.busy=false;self.conflict=nil;self.rows={}
+    serial=serial+1;self.busy=false;self.conflict=nil;self.pending_update=nil;self.rows={}
     if auth then auth:disconnect()end;wifi(ctx,0);notify(ctx,'Disconnected. Session cleared.')
   end
   function s:connect(ctx)
@@ -65,6 +88,7 @@ function M.new(hooks,dependencies)
   function s:toggle(ctx)
     ctx.state.github_sync_enabled=ctx.state.github_sync_enabled~=true
     if not ctx.state.github_sync_enabled then self:disconnect(ctx)end
+    self:refresh_file_status(ctx)
   end
   local function begin(ctx)
     if s.busy then return nil end
@@ -90,7 +114,8 @@ function M.new(hooks,dependencies)
     local next_value=Store.checkpoint(metadata,name,record,config.scope)
     return next_value and Store.save(ctx,next_value,config.scope,p.hash,revision)
   end
-  function s:upload(ctx,as_new)
+  function s:sync(ctx)return self:upload(ctx,false,true)end
+  function s:upload(ctx,as_new,combined)
     if ctx.budget then ctx.budget:extend()end
     local snapshot=hooks.snapshot(ctx,true)
     if not snapshot then notify(ctx,'Save the current document successfully before uploading.');return end
@@ -103,7 +128,8 @@ function M.new(hooks,dependencies)
       if type(uuid)~='string'or not uuid:match('^[%x-]+$')or #uuid<32 or #uuid>36 then failed(ctx,id,'random');return end
       name='local-'..uuid..(snapshot.name:lower():sub(-4)=='.txt'and '.txt'or '.md')
     end
-    self.conflict=nil
+    self.conflict=nil;self.pending_update=nil
+    local outcome
     local core=Sync.new(p.hash);core:configure(true,true)
     local op=core:begin('upload',snapshot)
     local function complete(c,receipt)
@@ -115,7 +141,9 @@ function M.new(hooks,dependencies)
       local result=core:finish(op,receipt,current)
       if not result then failed(c,id,'receipt');return end
       local saved=checkpoint(c,metadata,revision,result.name,result.record)
-      notify(c,saved and 'Uploaded and verified: '..name or 'Upload complete; sync record not saved. Recheck next upload.')
+      if saved then s.file_status='Up to date at last sync';s.remote_change=nil end
+      local success=combined and (outcome=='mark_synced'and 'Up to date: 'or 'Synced: ')or 'Uploaded and verified: '
+      notify(c,saved and success..name or 'Upload complete; sync record not saved. Recheck next sync.')
     end
     local started,err=auth:read(ctx,name,function(c,remote,why)
       if id~=serial then return end
@@ -125,9 +153,25 @@ function M.new(hooks,dependencies)
       if as_new then
         if remote.exists then failed(c,id,'remote_race');return end
         plan={action='create'}
-      else plan,why=core:checked(op,remote,metadata.documents[name])end
+      else
+        if combined then plan,why=Sync.reconcile(snapshot,remote,metadata.documents[name],p.hash)end
+        if plan and plan.action=='update_local'then
+          core:cancel();s.busy=false;s.conflict=nil
+          s.pending_update={name=name,sha=remote.sha,identity=snapshot.identity,revision=snapshot.revision,
+            fingerprint=plan.fingerprint,base_sha=metadata.documents[name].remote_blob_sha}
+          s.remote_change={name=name,identity=snapshot.identity,fingerprint=Sync.digest(p.hash,snapshot.bytes)}
+          s.file_status='Remote changes found'
+          notify(c,'Only GitHub changed. Update the local document or keep a copy.');return
+        end
+        plan,why=core:checked(op,remote,metadata.documents[name])
+      end
       if not plan then failed(c,id,why);return end
+      outcome=plan.action
       if plan.action=='conflict'then
+        if remote.exists then
+          s.remote_change={name=name,identity=snapshot.identity,fingerprint=Sync.digest(p.hash,snapshot.bytes)}
+          s.file_status='Remote changes found'
+        end
         s.busy=false;s.conflict={name=name,sha=remote.sha,reason=plan.reason}
         notify(c,'Conflict: originals kept. Choose a copy or cancel.');return
       end
@@ -142,9 +186,41 @@ function M.new(hooks,dependencies)
     end)
     if not started then failed(ctx,id,err)end
   end
+  function s:update_local(ctx)
+    local pending=self.pending_update
+    if not pending or type(hooks.apply_remote)~='function'then return end
+    if ctx.budget then ctx.budget:extend()end
+    local file=hooks.snapshot(ctx,false)
+    if not file or file.identity~=pending.identity or file.name~=pending.name or file.revision~=pending.revision
+      or Sync.digest(p.hash,file.bytes)~=pending.fingerprint then
+      self.pending_update=nil;notify(ctx,'Local document changed. Press Sync to check again.');return
+    end
+    local id=begin(ctx);if not id then return end
+    self.pending_update=nil
+    local metadata,revision=Store.load(ctx,config.scope,p.hash)
+    local record=metadata and metadata.documents[file.name]
+    if not record or record.remote_blob_sha~=pending.base_sha or record.last_synced_local_fingerprint~=pending.fingerprint then failed(ctx,id,'metadata_changed');return end
+    local ok,e=auth:read(ctx,file.name,function(c,remote,why)
+      if id~=serial then return end
+      if not remote or not unchanged(c,file)then failed(c,id,why or 'local_changed');return end
+      local plan=Sync.reconcile(file,remote,record,p.hash)
+      if not plan or plan.action~='update_local'then failed(c,id,'remote_changed');return end
+      local applied,backup=hooks.apply_remote(c,file,remote.bytes)
+      if not applied then failed(c,id,'local_update_failed');return end
+      local current=hooks.snapshot(c,false)
+      if not current or current.name~=file.name or current.bytes~=remote.bytes then failed(c,id,'unverified_update');return end
+      s.busy=false;s.remote_change=nil
+      local fp=Sync.digest(p.hash,remote.bytes)
+      local saved=fp and checkpoint(c,metadata,revision,file.name,{remote_path='documents/'..file.name,
+        remote_blob_sha=remote.sha,last_synced_local_fingerprint=fp})
+      s.file_status=saved and 'Up to date at last sync'or 'Saved locally'
+      notify(c,'Local document updated. Backup: '..backup..(saved and ''or ' (sync record not saved)'))
+    end,pending.sha)
+    if not ok then failed(ctx,id,e)end
+  end
   function s:browse(ctx)
     local id=begin(ctx);if not id then return end
-    self.conflict=nil;self.rows={}
+    self.conflict=nil;self.pending_update=nil;self.rows={}
     local ok,e=auth:list(ctx,function(c,rows,why)
       if id~=serial then return end
       if not rows then failed(c,id,why);return end
@@ -156,7 +232,7 @@ function M.new(hooks,dependencies)
     if hooks.can_import and not hooks.can_import()then notify(ctx,'Existing files and recovery are protected.');return end
     if type(row)~='table'or not Sync.name_ok(row.name)or not Sync.hex_ok(row.sha,40)then return end
     local id=begin(ctx);if not id then return end
-    self.conflict=nil
+    self.conflict=nil;self.pending_update=nil
     local ok,e=auth:read(ctx,row.name,function(c,remote,why)
       if id~=serial then return end
       if not remote or not remote.exists then failed(c,id,why);return end
@@ -176,11 +252,11 @@ function M.new(hooks,dependencies)
   end
   function s:close(ctx)
     self:pause(ctx)
-    self.rows={};self.conflict=nil;wifi(ctx,0)
+    self.rows={};self.conflict=nil;self.pending_update=nil;wifi(ctx,0)
   end
   function s:pause(ctx)
     if self.busy then
-      serial=serial+1;self.busy=false;self.conflict=nil
+      serial=serial+1;self.busy=false;self.conflict=nil;self.pending_update=nil
       if auth then auth:cancel_operation()end
       notify(ctx,'Transfer interrupted. Recheck before retrying.')
     end

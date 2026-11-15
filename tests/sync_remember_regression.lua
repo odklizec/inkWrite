@@ -69,17 +69,17 @@ for _,bad in ipairs({'broken',string.rep('x',2049),raw:gsub('example/docs','othe
  check(a:restore(h.ctx)==nil and h.calls==count and h.private.files[Credentials.FILE]==bad,'invalid/cross-scope record preserved for explicit Forget')
 end
 -- Actual UI: code is redrawn after a system cover and after a second start.
-h=Host.new();h.ctx.state.github_sync_enabled=true;h.ctx.invalidate=function()end
+h=Host.new();h.ctx.state.github_sync_enabled=true;h.ctx.state.github_sync_connection_choice=true;h.ctx.invalidate=function()end
 h.ctx.screen={width=480,height=800};local font={line_height=24};local captured
 local u=UI.new({},font,font,{config=Host.config(),primitives=primitives,auth_factory=function(c,p)captured=Auth.new(c,p);return captured end})
 local function press(code)u:input(h.ctx,{type='key',phase='down',code=code})end
-u:open(h.ctx);press('ArrowDown');press('Enter');h:respond(Host.code());u:tick(h.ctx)
+u:open(h.ctx);u.focus=4;press('Enter');h:respond(Host.code());u:tick(h.ctx)
 local drawn={};local g=setmetatable({text_box=function(_,x,y,w,z,text)drawn[text]=true end},{__index=function()return function()end end})
 u:draw(h.ctx,g);check(drawn['Sign-in code: ABCD-EFGH\nApprove the App in your browser.']and drawn['github.com/login/device'],'sign-in code has a dedicated full visible line')
 u:pause(h.ctx);u:resume(h.ctx);drawn={};u:draw(h.ctx,g)
 check(drawn['Sign-in code: ABCD-EFGH\nApprove the App in your browser.']and captured:status(h.ctx).user_code=='ABCD-EFGH','temporary system cover no longer clears sign-in code')
 u:leave(h.ctx);check(captured:status(h.ctx).user_code==nil,'actual exit clears incomplete code flow from RAM')
-u=UI.new({},font,font,{config=Host.config(),primitives=primitives});u:open(h.ctx);press('ArrowDown');press('Enter')
+u=UI.new({},font,font,{config=Host.config(),primitives=primitives});u:open(h.ctx);u.focus=4;press('Enter')
 local code=Host.code();code.user_code='WXYZ-1234';h:respond(code);u:tick(h.ctx);drawn={};u:draw(h.ctx,g)
 check(drawn['Sign-in code: WXYZ-1234\nApprove the App in your browser.']and not drawn['Sign-in code: ABCD-EFGH\nApprove the App in your browser.'],'second app instance displays fresh code rather than cached old header')
 -- Session restore is lazy: opening writing remains network-free, opening sync restores.

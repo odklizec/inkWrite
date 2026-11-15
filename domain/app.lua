@@ -4,7 +4,7 @@ local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
 local SyncUI=require('domain.sync_ui')
-local M={VERSION="1.0.10"}
+local M={VERSION="1.0.11"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 -- Typing pacing. None of these shorten the panel's own frame time; they keep
@@ -664,6 +664,27 @@ function M.load(ctx)
   A.sync=SyncUI.new({
     reserved_name=function()return A.doc and A.doc.name end,
     can_import=function()return not A.blocked end,
+    describe=function()return {name=A.doc and A.doc.name,dirty=A.dirty}end,
+    apply_remote=function(c,captured,text)
+      extend_budget(c)
+      if A.blocked or A.dirty or A.doc~=captured.identity or A.buffer.revision~=captured.revision
+        or A.doc.name~=captured.name or A.doc.base~=captured.bytes or A.buffer:text()~=captured.bytes then return nil end
+      local next_buffer=Buffer.new(text);if not next_buffer then return nil end
+      local pos=math.min(A.buffer.pos,#text)
+      while pos>0 and not next_buffer:is_boundary(pos)do pos=pos-1 end
+      next_buffer:seek(pos)
+      local backup=Docs.update_from_remote(c,captured.name,captured.bytes,text)
+      if not backup then return nil end
+      cancel_navigation();cancel_redraw()
+      A.doc={name=captured.name,base=text};A.buffer=next_buffer;A.anchor=nil;A.top=0
+      A.layout_revision=nil;A.layout_dirty_from=0;A.goal_x=nil;A.browsing=false
+      A.recovery_doc=nil;A.recovery_revision=nil;A.dirty=false;A.save_failed=false;A.status='Saved on SD card'
+      c.state.last=A.doc.name;c.state.cursor=pos
+      local rec=Docs.load_recovery(c)
+      if rec and rec.name==captured.name and rec.text==captured.bytes then Docs.call(c.storage,'remove','recovery.txt')end
+      refresh_layout(c);c:invalidate()
+      return true,backup
+    end,
     snapshot=function(c,save_first)
       if A.blocked or not A.doc then return nil end
       if save_first and (A.dirty or A.doc.base==nil)and not save(c)then return nil end
@@ -816,6 +837,13 @@ local function keyboard(ctx,ev)
       A.panel=nil;A.action_focus=nil;A.virtual=nil
       if A.view=="help" then A.view="editor" else A.view="help";A.help_page=1 end
       ctx:invalidate()
+    end
+    return true
+  end
+  if A.view=='editor'and code=='KeyG'and shortcut and not mods.shift then
+    if down then
+      cancel_navigation();cancel_redraw();A.keyboard:reset();A.typing_time=nil;A.panel=nil;A.action_focus=nil
+      A.sync:sync_document(ctx)
     end
     return true
   end

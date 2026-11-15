@@ -89,6 +89,25 @@ function M.import_copy(ctx,name,text,reserved)
   if verified~=text then return nil,'import_verify_failed',target end
   return target
 end
+-- Explicit remote-only update. Keep a verified public backup and recovery first.
+-- The host offers atomic writes, but no compare-and-swap against external writers.
+function M.update_from_remote(ctx,name,old,text)
+  if not M.name_ok(name)or name:find('..',1,true)or not Buffer.valid(old)or not Buffer.valid(text)
+    or #old>Buffer.MAX or #text>Buffer.MAX then return nil,'invalid_update'end
+  local current=M.read(ctx,name)
+  if current~=old then return nil,'local_changed'end
+  local rec=M.load_recovery(ctx)
+  if rec==nil or (rec and (rec.name:lower()~=name:lower()or rec.text~=old))then return nil,'recovery_protected'end
+  local target=M.fresh_name(ctx,'before-sync',name:lower():sub(-4)=='.txt'and '.txt'or '.md',name)
+  if not target then return nil,'backup_failed'end
+  local backup=M.import_copy(ctx,target,old,name)
+  if not backup then return nil,'backup_failed'end
+  if not M.recovery(ctx,name,old)then return nil,'recovery_write_failed',backup end
+  if M.read(ctx,name)~=old then return nil,'local_changed',backup end
+  if not call(ctx.files,'write',name,text)then return nil,'update_write_failed',backup end
+  if M.read(ctx,name)~=text then return nil,'update_verify_failed',backup end
+  return backup
+end
 -- No native rename exists. Copy and compare in 1 KiB timer slices, then remove.
 -- An interrupted/failed copy leaves the source intact, possibly alongside a copy.
 function M.rename(ctx,old,new,done)
