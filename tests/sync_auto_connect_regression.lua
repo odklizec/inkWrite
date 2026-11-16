@@ -49,7 +49,7 @@ h=setup('code',false);u,c=h.u,h.c;u.session:connect(c);u:tick(c);u.pending=nil
 local labels={};local texts={};local lines={}
 local g=setmetatable({text_box=function(_,x,y,w,ht,t)labels[t]=true end,text=function(_,x,y,t,o)texts[t]={x=x,y=y,options=o}end,line=function(_,...)lines[#lines+1]={...}end},{__index=function()return function()end end})
 u:draw(c,g);check(labels['Cancel sign-in']and not labels['Version history: current document'],'approval screen owns its input')
-h:approve();u.page='remote';u:tick(c);labels={};texts={};u:draw(c,g)
+h:approve();u.page='remote';for i=1,40 do u.session.rows[i]={name='file-'..i..'.md'}end;u.focus=15;u:tick(c);labels={};texts={};u:draw(c,g)
 check(not labels.Back and texts.Back and texts.Prev and texts.Next,'nested list has only the universal footer Back')
 check(texts.Back.options.font==h.ui and texts.Prev.options.font==h.ui and texts.Next.options.font==h.ui,'footer uses normal app UI font for every control')
 check(texts.Prev.x==240 and texts.Prev.options.align=='center'and texts.Next.x==460 and texts.Next.options.align=='right','Prev centered and Next anchored to right content edge')

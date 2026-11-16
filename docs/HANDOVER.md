@@ -1,3 +1,9 @@
+## 1.0.16 - Real paging and reliable footer taps
+
+Owner reported ineffective Prev/Next and intermittent Back. Footer previously moved focus even on a single page, ignored double_tap, and excluded side/bottom margins. Paging now selects the first row of the adjacent real page; unavailable Prev/Next are hidden and multi-page lists show a page count. Touch and keyboard use one page-turn helper. Footer hit area spans the entire unoccluded width and extends to the physical bottom; tap and double_tap both work there. List rows still accept single taps only, preventing accidental repeated destructive actions. No network/sync behavior change.
+
+Desktop 26/26 suites, 15,860 assertions. New pager suite has 44 checks for immediate visible page changes, exact previous-page return, unavailable controls, keyboard parity, rapid taps, edges and ignored swipes across portrait/landscape and two font heights. Native Pro synthetic 30-file browser changed 1/3 to 2/3 on one tap at (470,795), Prev returned, and Back at (4,795) returned to the main page, all without runtime faults. Final cloud/source/icon and Git verification are in the delivery artifact. Physical-device acceptance remains pending.
+
 ## 1.0.15 - Consistent sync navigation and connect-on-action
 
 Removed redundant Back rows from every nested sync list/information page; confirmation Cancel rows remain explicit. Universal footer uses the same 24 px preferred UI font, divider, Back position and baseline as the app pager; Prev is centred and Next anchors to the right chrome edge. Shared geometry drives hit testing. QR spacing still fits portrait/landscape including larger fallback fonts.

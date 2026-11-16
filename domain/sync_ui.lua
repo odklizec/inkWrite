@@ -107,7 +107,8 @@ function M.new(hooks,small,title,dependencies)
     local footer_y=bottom-48
     local per=math.max(1,(footer_y-top)//rh)
     u.focus=math.max(1,math.min(#rows,u.focus))
-    geometry={x=x,y=y,w=w,bottom=bottom,footer_y=footer_y,footer_left=(o.left or 0)+20,footer_right=ctx.screen.width-(o.right or 0)-20,top=top,row=rh,per=per,first=((u.focus-1)//per)*per+1,line=line,notice_lines=notice_lines,status_lines=status_lines,qr=qr}
+    local page=((u.focus-1)//per)+1;local pages=math.max(1,(#rows+per-1)//per)
+    geometry={x=x,y=y,w=w,bottom=bottom,page=page,pages=pages,touch_left=o.left or 0,touch_right=ctx.screen.width-(o.right or 0),touch_bottom=ctx.screen.height-(o.bottom or 0),footer_y=footer_y,footer_left=(o.left or 0)+20,footer_right=ctx.screen.width-(o.right or 0)-20,top=top,row=rh,per=per,first=((u.focus-1)//per)*per+1,line=line,notice_lines=notice_lines,status_lines=status_lines,qr=qr}
     local next_key=table.concat({u.page,u.focus,status.state,status.user_code or '',tostring(status.busy),status.reason or '',status.remember_error or '',tostring(s.busy),s.file_status,tostring(ctx.state.github_sync_enabled),tostring(ctx.state.github_sync_remember),s.notice,#rows,s.history and s.history.page or 0,s.history and s.history.anchor or '',w,bottom},'|')
     if key~=next_key then key=next_key;ctx:invalidate()end
   end
@@ -191,6 +192,10 @@ function M.new(hooks,small,title,dependencies)
     if not network_actions[r.action]and r.action~='connect_remember'and r.action~='connect_once'then u.pending=nil end
     perform(ctx,r);continue_pending(ctx)
   end
+  local function turn_page(delta)
+    local target=geometry.page+delta
+    if target>=1 and target<=geometry.pages then u.focus=(target-1)*geometry.per+1 end
+  end
   function u:sync_document(ctx)self:open(ctx);activate(ctx,1);prepare(ctx)end
   function u:input(ctx,ev)
     if ev.type=='key'then
@@ -200,21 +205,22 @@ function M.new(hooks,small,title,dependencies)
         if code=='Escape'then back(ctx)
         elseif code=='ArrowUp'or code=='up'then self.focus=math.max(1,self.focus-1)
         elseif code=='ArrowDown'or code=='down'then self.focus=math.min(#rows,self.focus+1)
-        elseif code=='ArrowLeft'or code=='left'then self.focus=math.max(1,self.focus-geometry.per)
-        elseif code=='ArrowRight'or code=='right'then self.focus=math.min(#rows,self.focus+geometry.per)
+        elseif code=='ArrowLeft'or code=='left'then turn_page(-1)
+        elseif code=='ArrowRight'or code=='right'then turn_page(1)
         elseif (code=='Enter'or code=='ok')and ev.phase=='down'then activate(ctx,self.focus)end
       end
-    elseif ev.type=='pointer'and ev.phase=='up'and ev.gesture=='tap'then
+    elseif ev.type=='pointer'and ev.phase=='up'then
       local l=geometry
-      if ev.x>=l.x and ev.x<l.x+l.w then
-        if ev.y>=l.top and ev.y<math.min(l.bottom-50,l.top+l.per*l.row)then
-          local i=l.first+(ev.y-l.top)//l.row
-          if rows[i]then self.focus=i;activate(ctx,i)end
-        elseif ev.y>=l.bottom-48 and ev.y<l.bottom then
-          if ev.x<l.x+l.w//3 then back(ctx)
-          elseif ev.x<l.x+l.w*2//3 then self.focus=math.max(1,self.focus-l.per)
-          else self.focus=math.min(#rows,self.focus+l.per)end
-        end
+      local tap=ev.gesture=='tap'or ev.gesture=='double_tap'
+      if tap and ev.x>=l.touch_left and ev.x<l.touch_right and ev.y>=l.footer_y and ev.y<l.touch_bottom then
+        local third=(l.touch_right-l.touch_left)/3
+        if ev.x<l.touch_left+third then back(ctx)
+        elseif ev.x<l.touch_left+2*third then turn_page(-1)
+        else turn_page(1)end
+      elseif ev.gesture=='tap'and ev.x>=l.x and ev.x<l.x+l.w
+        and ev.y>=l.top and ev.y<math.min(l.footer_y,l.top+l.per*l.row)then
+        local i=l.first+(ev.y-l.top)//l.row
+        if rows[i]then self.focus=i;activate(ctx,i)end
       end
     end
     if self.active then prepare(ctx)end
@@ -230,6 +236,7 @@ function M.new(hooks,small,title,dependencies)
   function u:draw(ctx,g)
     local l=geometry;g:clear(0)
     g:text(l.x,l.y,'GitHub sync',{font=title,color=15})
+    if l.pages>1 then g:text(l.x+l.w,l.y,l.page..' / '..l.pages,{font=small,color=15,align='right'})end
     local y=l.y+title.line_height+8
     for i,line in ipairs(header)do
       g:text_box(l.x,y,l.w,l.line*(i==3 and l.notice_lines or i==2 and l.status_lines or 1),line,{font=small,color=15,wrap='word',overflow='ellipsis'})
@@ -250,8 +257,8 @@ function M.new(hooks,small,title,dependencies)
     g:line(l.footer_left,l.footer_y,l.footer_right,l.footer_y,{color=15})
     local fy=l.footer_y+33
     g:text(l.footer_left+45,fy,'Back',{font=title,color=15,align='center',valign='middle'})
-    g:text((l.footer_left+l.footer_right)//2,fy,'Prev',{font=title,color=15,align='center',valign='middle'})
-    g:text(l.footer_right,fy,'Next',{font=title,color=15,align='right',valign='middle'})
+    if l.page>1 then g:text((l.footer_left+l.footer_right)//2,fy,'Prev',{font=title,color=15,align='center',valign='middle'})end
+    if l.page<l.pages then g:text(l.footer_right,fy,'Next',{font=title,color=15,align='right',valign='middle'})end
   end
   return u
 end
