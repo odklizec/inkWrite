@@ -63,14 +63,14 @@ function M.new(hooks,dependencies)
     else notify(ctx,'Remember enabled. Connect once to save the connection.')end
   end
   function s:forget(ctx)
-    serial=serial+1;self.busy=false;self.conflict=nil;self.pending_update=nil;self.rows={}
+    serial=serial+1;self.busy=false;self.conflict=nil;self.pending_update=nil;self.rows={};self.history=nil
     local ok=ready(ctx)and auth:forget(ctx)
     if ok then ctx.state.github_sync_remember=false end
     wifi(ctx,0);notify(ctx,ok and 'Connection forgotten. Sign in again to connect.'or 'Could not remove saved connection. Retry Forget before using sync.')
   end
   function s:disconnect(ctx)
     reconnect_allowed=false
-    serial=serial+1;self.busy=false;self.conflict=nil;self.pending_update=nil;self.rows={}
+    serial=serial+1;self.busy=false;self.conflict=nil;self.pending_update=nil;self.rows={};self.history=nil
     if auth then auth:disconnect()end;wifi(ctx,0);notify(ctx,'Disconnected. Session cleared.')
   end
   function s:connect(ctx)
@@ -218,9 +218,48 @@ function M.new(hooks,dependencies)
     end,pending.sha)
     if not ok then failed(ctx,id,e)end
   end
+  function s:history_page(ctx,name,page,anchor)
+    local id=begin(ctx);if not id then return end
+    self.conflict=nil;self.pending_update=nil
+    local ok,e=auth:history(ctx,name,page,anchor,function(c,result,why)
+      if id~=serial then return end
+      if not result then failed(c,id,why);return end
+      s.busy=false;s.history={name=name,rows=result.rows,page=result.page,anchor=result.anchor,
+        more=result.more,limited=result.limited}
+      notify(c,result.limited and 'History limit reached (100 versions).'
+        or (#result.rows==0 and 'No versions on this page.'or 'Select a version. Restores are separate local copies.'))
+    end)
+    if not ok then failed(ctx,id,e)end
+  end
+  function s:current_history(ctx)
+    local info=hooks.describe and hooks.describe()
+    if not info or not Sync.name_ok(info.name)then notify(ctx,'Open a document to view its history.');return end
+    return self:history_page(ctx,info.name,1)
+  end
+  function s:restore_revision(ctx,row)
+    if hooks.can_import and not hooks.can_import()then notify(ctx,'Existing files and recovery are protected.');return end
+    local history=self.history
+    if not history or type(row)~='table'or not Sync.hex_ok(row.sha,40)then return end
+    local found=false;for _,item in ipairs(history.rows)do if item==row then found=true;break end end
+    if not found then return end
+    local name,commit=history.name,row.sha
+    local id=begin(ctx);if not id then return end
+    local ok,e=auth:read_revision(ctx,name,commit,function(c,remote,why)
+      if id~=serial then return end
+      if not remote or not remote.exists then failed(c,id,why or 'revision_unavailable');return end
+      if hooks.can_import and not hooks.can_import()then failed(c,id,'import');return end
+      local target=Docs.fresh_name(c,'restore',name:lower():sub(-4)=='.txt'and '.txt'or '.md',hooks.reserved_name())
+      local imported=target and Docs.import_copy(c,target,remote.bytes,hooks.reserved_name())
+      if not imported then failed(c,id,'import');return end
+      s.busy=false
+      -- Historical copies never establish the current branch's sync checkpoint.
+      notify(c,'Restored as local copy: '..imported)
+    end)
+    if not ok then failed(ctx,id,e)end
+  end
   function s:browse(ctx)
     local id=begin(ctx);if not id then return end
-    self.conflict=nil;self.pending_update=nil;self.rows={}
+    self.conflict=nil;self.pending_update=nil;self.rows={};self.history=nil
     local ok,e=auth:list(ctx,function(c,rows,why)
       if id~=serial then return end
       if not rows then failed(c,id,why);return end
@@ -252,7 +291,7 @@ function M.new(hooks,dependencies)
   end
   function s:close(ctx)
     self:pause(ctx)
-    self.rows={};self.conflict=nil;self.pending_update=nil;wifi(ctx,0)
+    self.rows={};self.conflict=nil;self.pending_update=nil;self.history=nil;wifi(ctx,0)
   end
   function s:pause(ctx)
     if self.busy then

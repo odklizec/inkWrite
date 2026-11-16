@@ -21,12 +21,27 @@ function M.new(hooks,small,title,dependencies)
       if ctx.state.github_sync_remember==true and status.connected and status.remember_error=='connection_write_failed'then
         rows[#rows+1]={label='Retry saving connection',action='retry_remember'}
       end
+      rows[#rows+1]={label='Version history: current document',action='current_history'}
     elseif u.page=='remote'then
       rows[#rows+1]={label='Refresh remote folder',action='browse'}
       for _,r in ipairs(s.rows)do rows[#rows+1]={label=r.name,action='select',file=r}end
     elseif u.page=='confirm'then
       rows[1].label='Cancel'
       rows[#rows+1]={label='Download as local copy',action='download',file=u.selected}
+      rows[#rows+1]={label='Version history',action='file_history',file=u.selected}
+    elseif u.page=='history'then
+      rows[#rows+1]={label='Refresh latest history',action='history_refresh'}
+      local h=s.history
+      if h then
+        if h.page>1 then rows[#rows+1]={label='Newer versions',action='history_prev'}end
+        if h.more then rows[#rows+1]={label='Older versions',action='history_next'}end
+        for _,r in ipairs(h.rows)do
+          rows[#rows+1]={label=r.date..' '..r.sha:sub(1,7)..' '..r.summary,action='version',file=r}
+        end
+      end
+    elseif u.page=='version'then
+      rows[1].label='Cancel'
+      rows[#rows+1]={label='Restore as new local copy',action='restore_version',file=u.version}
     elseif u.page=='conflict'then
       rows[1].label='Cancel'
       rows[#rows+1]={label='Upload local as NEW remote file',action='new'}
@@ -64,6 +79,11 @@ function M.new(hooks,small,title,dependencies)
       header[3]=errors[status.reason]or 'Connection failed. Retry Connect; check App setup.'
     end
     if u.page=='confirm'then header[3]='Download: '..u.selected.name end
+    if u.page=='history'then
+      header[1]='History: '..(u.history_name or '')
+      header[2]='Page '..(s.history and s.history.page or 1)..' / '..status.state:gsub('_',' ')
+    end
+    if u.page=='version'then header[3]=u.version.date..' '..u.version.sha:sub(1,7)..'\nOriginals kept; restore creates a copy.'end
     if u.page=='revoke'then header[3]='GitHub Settings > Applications > Authorized GitHub Apps. Revoke inkWrite; then disconnect here.'end
     if u.page=='update'then header[3]='Only GitHub changed. A local backup is kept before updating.'end
     if u.page=='connect'then header[3]='Save GitHub login unencrypted on SD.\nAnyone with the card can recover it.'end
@@ -87,14 +107,18 @@ function M.new(hooks,small,title,dependencies)
     local per=math.max(1,(bottom-top-50)//rh)
     u.focus=math.max(1,math.min(#rows,u.focus))
     geometry={x=x,y=y,w=w,bottom=bottom,top=top,row=rh,per=per,first=((u.focus-1)//per)*per+1,line=line,notice_lines=notice_lines,status_lines=status_lines,qr=qr}
-    local next_key=table.concat({u.page,u.focus,status.state,status.user_code or '',tostring(status.busy),status.reason or '',status.remember_error or '',tostring(s.busy),s.file_status,tostring(ctx.state.github_sync_enabled),tostring(ctx.state.github_sync_remember),s.notice,#rows,w,bottom},'|')
+    local next_key=table.concat({u.page,u.focus,status.state,status.user_code or '',tostring(status.busy),status.reason or '',status.remember_error or '',tostring(s.busy),s.file_status,tostring(ctx.state.github_sync_enabled),tostring(ctx.state.github_sync_remember),s.notice,#rows,s.history and s.history.page or 0,s.history and s.history.anchor or '',w,bottom},'|')
     if key~=next_key then key=next_key;ctx:invalidate()end
   end
   function u:open(ctx)self.active=true;self.page='main';self.focus=1;key=nil;s:open(ctx);prepare(ctx)end
   local function back(ctx)
     if s.busy then s:disconnect(ctx)end
     if u.page=='main'then s:close(ctx);u.active=false;ctx:invalidate()
-    else s.conflict=nil;s.pending_update=nil;u.selected=nil;u.page='main';u.focus=1;prepare(ctx)end
+    else
+      local page=u.page
+      s.conflict=nil;s.pending_update=nil;u.version=nil;u.selected=nil
+      u.page=page=='version'and 'history'or (page=='history'and u.history_origin or 'main');u.focus=1;prepare(ctx)
+    end
   end
   local function connect(ctx)
     if ctx.state.github_sync_remember==true or ctx.state.github_sync_connection_choice==true then
@@ -118,6 +142,20 @@ function M.new(hooks,small,title,dependencies)
       ctx.state.github_sync_enabled=true;ctx.state.github_sync_connection_choice=true
       if r.action=='connect_remember'then s:remember(ctx)end
       s:connect(ctx);u.page='main';u.focus=1
+    elseif r.action=='current_history'then
+      if not status.connected then s.notice='Connect to GitHub first.'
+      else
+        local info=hooks.describe and hooks.describe()
+        if info and info.name then u.history_name=info.name;u.history_origin='main';u.page='history';u.focus=1;s.history=nil;s:current_history(ctx)
+        else s.notice='Open a document to view its history.'end
+      end
+    elseif r.action=='file_history'then
+      u.history_origin='remote';u.history_name=r.file.name;u.page='history';u.focus=1;s.history=nil;s:history_page(ctx,r.file.name,1)
+    elseif r.action=='history_refresh'then s:history_page(ctx,u.history_name,1);u.focus=1
+    elseif r.action=='history_prev'or r.action=='history_next'then
+      local h=s.history;if h then s:history_page(ctx,h.name,h.page+(r.action=='history_next'and 1 or -1),h.anchor);u.focus=1 end
+    elseif r.action=='version'then u.version=r.file;u.page='version';u.focus=1
+    elseif r.action=='restore_version'then s:restore_revision(ctx,r.file);u.version=nil;u.page='history';u.focus=1
     elseif r.action=='new'then s:upload(ctx,true);u.page='main';u.focus=1
     elseif r.action=='browse'then u.page='remote';u.focus=1;s:browse(ctx)
     elseif r.action=='select'then u.selected=r.file;u.page='confirm';u.focus=1

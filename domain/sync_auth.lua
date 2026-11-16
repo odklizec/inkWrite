@@ -138,7 +138,7 @@ function M.new(config,primitives)
                 or not Sync.hex_ok(branch.commit.sha,40)then done(c5,nil,'branch_mismatch');return end
               if not valid_token(c5)then done(c5,nil,'session_expired');return end
               account_id=user_id;repository_id=repo_id;verified=true
-              done(c5,true)
+              done(c5,true,nil,branch.commit.sha)
             end)
           end)
         end)
@@ -318,7 +318,7 @@ function M.new(config,primitives)
       end)
     return true
   end
-  local function operation(ctx,name,done,write,bytes,sha,expected_sha,before_write)
+  local function operation(ctx,name,done,write,bytes,sha,expected_sha,before_write,commit_ref)
     if type(done)~='function'or not Sync.name_ok(name)then return nil,'invalid_argument'end
     if busy then return nil,'busy'end
     if not verified or not valid_token(ctx)then return nil,'authorization_required'end
@@ -328,7 +328,7 @@ function M.new(config,primitives)
       if not ok then failure(err,c);done(c,nil,err);return end
       local path='documents/'..name
       local route=prefix..'/contents/documents/'..encode(name)
-      local req={path=route..'?ref='..encode(scope.branch),method='GET',headers=headers(true),response_limit=49152}
+      local req={path=route..'?ref='..encode(commit_ref or scope.branch),method='GET',headers=headers(true),response_limit=49152}
       local fingerprint
       if write then
         if before_write and before_write(c)~=true then busy=false;state='connected';done(c,nil,'local_changed');return end
@@ -364,6 +364,36 @@ function M.new(config,primitives)
   function s:read(ctx,name,done,expected_sha)
     if expected_sha~=nil and not Sync.hex_ok(expected_sha,40)then return nil,'invalid_revision'end
     return operation(ctx,name,done,false,nil,nil,expected_sha)
+  end
+  function s:read_revision(ctx,name,commit,done)
+    if not Sync.hex_ok(commit,40)then return nil,'invalid_revision'end
+    return operation(ctx,name,done,false,nil,nil,nil,nil,commit)
+  end
+  function s:history(ctx,name,page,anchor,done)
+    if not Sync.name_ok(name)or not int(page,1,Payload.HISTORY_MAX_PAGES)
+      or (anchor~=nil and not Sync.hex_ok(anchor,40))or (page>1 and anchor==nil)
+      or type(done)~='function'then return nil,'invalid_history_request'end
+    if busy then return nil,'busy'end
+    if not verified or not valid_token(ctx)then return nil,'authorization_required'end
+    busy=true;state='verifying';reason=nil
+    validate_access(ctx,function(c,ok,why,head)
+      if not ok then failure(why,c);done(c,nil,why);return end
+      local ref=anchor or head
+      state='history'
+      get(c,prefix..'/commits?path='..encode('documents/'..name)..'&sha='..ref
+        ..'&per_page='..Payload.HISTORY_PAGE_SIZE..'&page='..page,function(c2,res)
+        busy=false
+        if not valid_token(c2)then done(c2,nil,'session_expired');return end
+        local rows,err
+        if res.err or res.status~=200 then err=response_error(res)
+        else rows,err=Payload.history(res.data)end
+        if err=='authorization_required'then failure(err,c2)else state=rows and 'connected'or 'error';reason=err end
+        done(c2,rows and {rows=rows,page=page,anchor=ref,
+          more=#rows==Payload.HISTORY_PAGE_SIZE and page<Payload.HISTORY_MAX_PAGES,
+          limited=#rows==Payload.HISTORY_PAGE_SIZE and page==Payload.HISTORY_MAX_PAGES}or nil,err)
+      end)
+    end)
+    return true
   end
   function s:write(ctx,name,bytes,sha,done,before_write)
     if before_write~=nil and type(before_write)~='function'then return nil,'invalid_guard'end

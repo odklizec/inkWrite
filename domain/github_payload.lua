@@ -28,6 +28,31 @@ function M.directory(payload)
   table.sort(rows,function(a,b)return a.name<b.name end)
   return rows
 end
+-- Retain one small history page. Full commit messages/authors never enter UI state.
+M.HISTORY_PAGE_SIZE=5
+M.HISTORY_MAX_PAGES=20
+function M.history(payload)
+  if type(payload)~='table'then return nil,'invalid_history'end
+  local n=0
+  for k in pairs(payload)do
+    n=n+1
+    if n>M.HISTORY_PAGE_SIZE or type(k)~='number'or k%1~=0 or k<1 or k>M.HISTORY_PAGE_SIZE then return nil,'invalid_history'end
+  end
+  local rows,seen={},{}
+  for i=1,n do
+    local v=payload[i];local c=type(v)=='table'and v.commit
+    local a=type(c)=='table'and c.committer
+    if not v or not Sync.hex_ok(v.sha,40)or seen[v.sha]or type(c)~='table'
+      or type(a)~='table'or type(a.date)~='string'or #a.date>35
+      or not a.date:match('^%d%d%d%d%-%d%d%-%d%dT%d%d:%d%d:%d%d')
+      or type(c.message)~='string'or #c.message>8192 or not Sync.text_ok(c.message)then return nil,'invalid_history'end
+    seen[v.sha]=true
+    local message=c.message:match('^[^\r\n]*'):gsub('[%c]',' ')
+    local stop=utf8.offset(message,65);if stop then message=message:sub(1,stop-1)end
+    rows[#rows+1]={sha=v.sha,date=a.date:sub(1,10),summary=message}
+  end
+  return rows
+end
 function M.read(status,payload,path,codec)
   if not Sync.path_ok(path)then return nil,'invalid_path'end
   if type(codec)~='table'or type(codec.encode)~='function'or type(codec.decode)~='function'then return nil,'invalid_codec'end
