@@ -8,9 +8,9 @@ function M.new(hooks,small,title,dependencies)
   local rows,header,geometry,key,status={},{},{},nil,{}
   local function prepare(ctx)
     status=s:status(ctx)
-    if s.conflict and u.page~='conflict'then u.page='conflict';u.focus=1 end
-    if s.pending_update and u.page~='update'then u.page='update';u.focus=1 end
-    rows={{label='Back',action='back'}}
+    if not u.pending and s.conflict and u.page~='conflict'then u.page='conflict';u.focus=1 end
+    if not u.pending and s.pending_update and u.page~='update'then u.page='update';u.focus=1 end
+    rows={}
     if u.page=='main'then
       rows={{label='Sync this document',action='sync',primary=true},
         {label='Browse remote documents',action='browse'}}
@@ -26,7 +26,7 @@ function M.new(hooks,small,title,dependencies)
       rows[#rows+1]={label='Refresh remote folder',action='browse'}
       for _,r in ipairs(s.rows)do rows[#rows+1]={label=r.name,action='select',file=r}end
     elseif u.page=='confirm'then
-      rows[1].label='Cancel'
+      rows={{label='Cancel',action='back'}}
       rows[#rows+1]={label='Download as local copy',action='download',file=u.selected}
       rows[#rows+1]={label='Version history',action='file_history',file=u.selected}
     elseif u.page=='history'then
@@ -40,22 +40,22 @@ function M.new(hooks,small,title,dependencies)
         end
       end
     elseif u.page=='version'then
-      rows[1].label='Cancel'
+      rows={{label='Cancel',action='back'}}
       rows[#rows+1]={label='Restore as new local copy',action='restore_version',file=u.version}
     elseif u.page=='conflict'then
-      rows[1].label='Cancel'
+      rows={{label='Cancel',action='back'}}
       rows[#rows+1]={label='Upload local as NEW remote file',action='new'}
       if s.conflict and s.conflict.sha then rows[#rows+1]={label='Download remote as local copy',action='download',file=s.conflict}end
     elseif u.page=='update'then
-      rows[1].label='Cancel'
+      rows={{label='Cancel',action='back'}}
       rows[#rows+1]={label='Update local document',action='update_local'}
       rows[#rows+1]={label='Download as local copy',action='update_copy'}
     elseif u.page=='connect'then
-      rows[1].label='Cancel'
+      rows={{label='Cancel',action='back'}}
       rows[#rows+1]={label='Remember and connect',action='connect_remember'}
       rows[#rows+1]={label='Connect for this session only',action='connect_once'}
     elseif u.page=='remember'then
-      rows[1].label='Cancel'
+      rows={{label='Cancel',action='back'}}
       rows[#rows+1]={label='Remember on this device',action='consent'}
     end
     local approving=status.user_code~=nil and u.page=='main'
@@ -90,28 +90,30 @@ function M.new(hooks,small,title,dependencies)
     if u.page=='remember'then header[3]='Save GitHub login unencrypted on SD.\nAnyone with the card can recover it.'end
     local o=ctx.screen.occlusion or {};local x,y=(o.left or 0)+16,(o.top or 0)+12
     local w=ctx.screen.width-(o.right or 0)-x-16
-    local bottom=ctx.screen.height-(o.bottom or 0)-12
+    local bottom=ctx.screen.height-(o.bottom or 0)-18
     local notice_lines=(u.page=='remember'or u.page=='connect')and (w>=640 and 3 or 4)or 2
     local line=small.line_height+4;local top=y+title.line_height+8+line*(1+status_lines+notice_lines)
     local rh=math.max(44,small.line_height+12)
     local qr
     if approving then
-      local available=math.min(w,bottom-top-50-rh-16,222)
+      local available=math.min(w,bottom-top-48-rh-10,222)
       local scale=math.floor(available/ApprovalQR.size)
       if scale>=2 then
         local size=ApprovalQR.size*scale
-        qr={x=x+(w-size)//2,y=top+4,size=size,scale=scale}
-        top=qr.y+size+12
+        qr={x=x+(w-size)//2,y=top+2,size=size,scale=scale}
+        top=qr.y+size+8
       end
     end
-    local per=math.max(1,(bottom-top-50)//rh)
+    local footer_y=bottom-48
+    local per=math.max(1,(footer_y-top)//rh)
     u.focus=math.max(1,math.min(#rows,u.focus))
-    geometry={x=x,y=y,w=w,bottom=bottom,top=top,row=rh,per=per,first=((u.focus-1)//per)*per+1,line=line,notice_lines=notice_lines,status_lines=status_lines,qr=qr}
+    geometry={x=x,y=y,w=w,bottom=bottom,footer_y=footer_y,footer_left=(o.left or 0)+20,footer_right=ctx.screen.width-(o.right or 0)-20,top=top,row=rh,per=per,first=((u.focus-1)//per)*per+1,line=line,notice_lines=notice_lines,status_lines=status_lines,qr=qr}
     local next_key=table.concat({u.page,u.focus,status.state,status.user_code or '',tostring(status.busy),status.reason or '',status.remember_error or '',tostring(s.busy),s.file_status,tostring(ctx.state.github_sync_enabled),tostring(ctx.state.github_sync_remember),s.notice,#rows,s.history and s.history.page or 0,s.history and s.history.anchor or '',w,bottom},'|')
     if key~=next_key then key=next_key;ctx:invalidate()end
   end
   function u:open(ctx)self.active=true;self.page='main';self.focus=1;key=nil;s:open(ctx);prepare(ctx)end
   local function back(ctx)
+    if u.pending then u.pending=nil;s:disconnect(ctx)end
     if s.busy then s:disconnect(ctx)end
     if u.page=='main'then s:close(ctx);u.active=false;ctx:invalidate()
     else
@@ -121,21 +123,19 @@ function M.new(hooks,small,title,dependencies)
     end
   end
   local function connect(ctx)
+    local current=s:status(ctx)
+    if current.busy or current.user_code then u.page='main';u.focus=1;return end
     if ctx.state.github_sync_remember==true or ctx.state.github_sync_connection_choice==true then
-      ctx.state.github_sync_enabled=true;s:connect(ctx)
+      ctx.state.github_sync_enabled=true;u.page='main';u.focus=1;s:connect(ctx)
     else u.page='connect';u.focus=1 end
   end
-  local function activate(ctx,index)
-    local r=rows[index];if not r then return end
-    if r.action=='back'then back(ctx);return end
-    if s.busy then return end
-    if r.action=='cancel_auth'then s:disconnect(ctx);u.focus=1
+  local function perform(ctx,r)
+    if r.action=='cancel_auth'then u.pending=nil;s:disconnect(ctx);u.focus=1
     elseif r.action=='sync'then
-      if status.busy then return end
-      if status.connected then s:sync(ctx)else connect(ctx)end
+      s:sync(ctx)
     elseif r.action=='toggle'then s:toggle(ctx)
     elseif r.action=='connect'then
-      if status.connected or status.busy or status.user_code then s:disconnect(ctx)else connect(ctx)end
+      if status.connected or status.busy or status.user_code then u.pending=nil;s:disconnect(ctx)else connect(ctx)end
     elseif r.action=='update_local'then s:update_local(ctx);u.page='main';u.focus=1
     elseif r.action=='update_copy'then s:download(ctx,s.pending_update);u.page='main';u.focus=1
     elseif r.action=='connect_remember'or r.action=='connect_once'then
@@ -143,8 +143,7 @@ function M.new(hooks,small,title,dependencies)
       if r.action=='connect_remember'then s:remember(ctx)end
       s:connect(ctx);u.page='main';u.focus=1
     elseif r.action=='current_history'then
-      if not status.connected then s.notice='Connect to GitHub first.'
-      else
+      do
         local info=hooks.describe and hooks.describe()
         if info and info.name then u.history_name=info.name;u.history_origin='main';u.page='history';u.focus=1;s.history=nil;s:current_history(ctx)
         else s.notice='Open a document to view its history.'end
@@ -167,6 +166,30 @@ function M.new(hooks,small,title,dependencies)
     elseif r.action=='consent'then s:remember(ctx);u.page='main';u.focus=1
     elseif r.action=='retry_remember'then s:remember(ctx)end
     prepare(ctx)
+  end
+  local network_actions={sync=true,browse=true,current_history=true,file_history=true,
+    history_refresh=true,history_prev=true,history_next=true,download=true,new=true,
+    update_local=true,update_copy=true,restore_version=true}
+  local function continue_pending(ctx)
+    local pending=u.pending;if not pending then return end
+    status=s:status(ctx)
+    if status.connected and not status.busy then
+      u.pending=nil;perform(ctx,pending)
+    elseif not status.busy and not status.user_code and u.page~='connect'then
+      u.pending=nil -- One attempt only. Another deliberate action may try again.
+    end
+  end
+  local function activate(ctx,index)
+    local r=rows[index];if not r then return end
+    if r.action=='back'then back(ctx);return end
+    if s.busy then return end
+    status=s:status(ctx)
+    if network_actions[r.action]and (not status.connected or status.busy)then
+      if not u.pending then u.pending=r end
+      connect(ctx);prepare(ctx);continue_pending(ctx);return
+    end
+    if not network_actions[r.action]and r.action~='connect_remember'and r.action~='connect_once'then u.pending=nil end
+    perform(ctx,r);continue_pending(ctx)
   end
   function u:sync_document(ctx)self:open(ctx);activate(ctx,1);prepare(ctx)end
   function u:input(ctx,ev)
@@ -199,12 +222,11 @@ function M.new(hooks,small,title,dependencies)
   end
   function u:tick(ctx)
     if status.state=='authorizing'then s:poll(ctx)end
-    prepare(ctx)
-    if status.reason=='session_expired'and ctx.state.github_sync_remember==true then s:open(ctx);prepare(ctx)end
+    continue_pending(ctx);prepare(ctx)
   end
   function u:pause(ctx)s:pause(ctx);key=nil;if self.active then prepare(ctx)end end
   function u:resume(ctx)if self.active then key=nil;s:open(ctx);prepare(ctx)end end
-  function u:leave(ctx)s:leave(ctx)end
+  function u:leave(ctx)self.pending=nil;s:leave(ctx)end
   function u:draw(ctx,g)
     local l=geometry;g:clear(0)
     g:text(l.x,l.y,'GitHub sync',{font=title,color=15})
@@ -225,9 +247,11 @@ function M.new(hooks,small,title,dependencies)
       if i==self.focus or rows[i].primary then g:rect(l.x,ry,l.w,l.row-2,{color=15,line_width=rows[i].primary and 2 or 1})end
       g:text_box(l.x+10,ry+6,l.w-20,l.row-8,rows[i].label,{font=small,color=15,overflow='ellipsis'})
     end
-    g:text(l.x,l.bottom-36,'Back',{font=small,color=15})
-    g:text(l.x+l.w//3,l.bottom-36,'Prev',{font=small,color=15})
-    g:text(l.x+l.w*2//3,l.bottom-36,'Next',{font=small,color=15})
+    g:line(l.footer_left,l.footer_y,l.footer_right,l.footer_y,{color=15})
+    local fy=l.footer_y+33
+    g:text(l.footer_left+45,fy,'Back',{font=title,color=15,align='center',valign='middle'})
+    g:text((l.footer_left+l.footer_right)//2,fy,'Prev',{font=title,color=15,align='center',valign='middle'})
+    g:text(l.footer_right,fy,'Next',{font=title,color=15,align='right',valign='middle'})
   end
   return u
 end

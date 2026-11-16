@@ -2,7 +2,7 @@
 
 ## Use it
 
-1. Open **Settings > More > GitHub sync** and connect if needed.
+1. Open **Settings > More > GitHub sync** ; selecting a network action connects if needed and continues it after approval.
 2. Choose **Version history: current document**. Unsaved editor changes are left alone. Alternatively Browse remote documents, select a filename, then choose **Version history**.
 3. Entries show commit date, short commit ID and the first line of the commit message. **Older versions** and **Newer versions** change GitHub pages; footer Prev/Next moves through controls when a screen is small.
 4. Select a version. Cancel is selected initially. Choose **Restore as new local copy** to retrieve that exact commit's document.

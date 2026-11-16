@@ -87,15 +87,15 @@ check(not bad.s.busy and not bad.s.history and not bad.auth:status(bad.ctx).conn
 -- Actual UI + auth integration: entry from current doc, explicit confirm, footer/back.
 h=setup();c,s=h.ctx,h.s;local u=h.u;u:open(c);u.focus=7;h:key('Enter');h:verify(h.auth);h:respond(commits(5));u:tick(c)
 check(u.page=='history'and s.history.name=='ideas.md','main history opens current document even with unsaved edits, without saving it')
-u.focus=4;h:key('Enter');check(u.page=='version'and u.focus==1,'version selection defaults to Cancel')
+u.focus=3;h:key('Enter');check(u.page=='version'and u.focus==1,'version selection defaults to Cancel')
 local before=h.calls;h:key('Enter');check(u.page=='history'and h.calls==before,'Cancel version issues no read or write')
-u.focus=4;h:key('Enter');u.focus=2;h:key('Enter');h:verify(h.auth);h:respond(F.file('ideas.md','restored',F.OLD));u:tick(c)
+u.focus=3;h:key('Enter');u.focus=2;h:key('Enter');h:verify(h.auth);h:respond(F.file('ideas.md','restored',F.OLD));u:tick(c)
 check(u.page=='history'and h.files['restore-002.md']=='restored','explicit UI restore creates a new copy')
 local labels={};local g=setmetatable({text_box=function(_,x,y,w,ht,t)labels[t]=true end},{__index=function()return function()end end});u:draw(c,g)
 check(labels['Restored as local copy: restore-002.md'],'restore result stays visible on history page')
 h:key('Escape');check(u.page=='main','history Back returns to original sync page')
 -- Page failures retain the previous successful list and visible error, no retries.
-u.focus=7;h:key('Enter');h:verify(h.auth);h:respond(commits(5));u:tick(c);u.focus=3;h:key('Enter');h:verify(h.auth);h:respond({},429);u:tick(c)
+u.focus=7;h:key('Enter');h:verify(h.auth);h:respond(commits(5));u:tick(c);u.focus=2;h:key('Enter');h:verify(h.auth);h:respond({},429);u:tick(c)
 check(s.history.page==1 and not s.busy and s.notice:find('did not finish',1,true),'failed page retains prior page for manual retry')
 return n
 
