@@ -1,9 +1,11 @@
 {
   "app_id": "inkwrite",
   "display_name": "inkWrite",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "api": "2.26",
-  "permissions": ["net"],
+  "permissions": [
+    "net"
+  ],
   "entry": "index.lua",
   "description": "A quiet Bluetooth-keyboard writer with ordinary Markdown files on SD",
   "display": {

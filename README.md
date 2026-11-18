@@ -4,7 +4,7 @@ For Studio imports use the corrected exporter described in
 [Studio project layout](docs/STUDIO-PROJECT-LAYOUT.md). Desktop tests and the
 separate diagnostic are stored there as text references, avoiding mixed app roots.
 
-Development build **1.0.19** adds optional manual GitHub sync under **Settings > More > GitHub sync**. Choose **Sync this document** or press **Ctrl+G**: inkWrite checks the saved document and GitHub, then uploads local changes or offers **Update local document** when only GitHub changed. Updating asks first and keeps a verified `before-sync-###` local backup. Conflicts keep both originals and offer copies. File status distinguishes local changes, the last successful sync and detected remote changes.
+Development build **1.0.20** adds optional manual GitHub sync under **Settings > More > GitHub sync**. Choose **Sync this document** or press **Ctrl+G**: inkWrite checks the saved document and GitHub, then uploads local changes or offers **Update local document** when only GitHub changed. Updating asks first and keeps a verified `before-sync-###` local backup. Conflicts keep both originals and offer copies. File status distinguishes local changes, the last successful sync and detected remote changes.
 
 Direct GitHub device sign-in remains in use, with a QR code for approval. First connection offers **Remember and connect** or **Connect for this session only**. Remember requires consent to store reusable credentials unencrypted on the SD card; anyone with the card can recover them. Saved credentials can renew without browser approval while GitHub permits it. **Forget saved connection** removes them. No hosted service is required. Local save, autosave and recovery work independently. See [simpler sync workflow and test steps](docs/GITHUB-SYNC-1.0.13.md).
 
@@ -21,6 +21,12 @@ Build 1.0.19 fixes touch feedback: single taps immediately show the new caret an
 See [Phase 3 implementation and test instructions](docs/GITHUB-SYNC-PHASE3.md), [API review](docs/XTAPP-API-REVIEW-2026-11-13.md), [App setup](docs/GITHUB-APP-SETUP.md) and [Studio project layout](docs/STUDIO-PROJECT-LAYOUT.md). The owner reported the standalone Phase 2 sign-in test working; document transfers still need device acceptance.
 
 A quiet writing and journaling app for Xteink X4Pro and X4Classic. Requires compatible Gancao firmware with XTApp API 2.26 support.
+
+## GitHub setup
+
+Open **Settings > More > GitHub sync > GitHub setup / change repository**. New installs open setup automatically. Enter your own GitHub App's public Client ID, numeric App ID and GitHub login, approve the device code (or scan its QR), then choose a private repository and branch. Save the verified destination. No secrets or source edits are needed. Existing owner setup is retained.
+
+Each saved destination keeps separate sync records, pending uploads and remembered credentials. Switching leaves automatic uploads Off and asks for Remember consent again. Four additional setups plus the existing owner setup can be retained. [Setup instructions and device checks](docs/GITHUB-GENERAL-SETUP-1.0.20.md).
 
 ## Start writing
 

@@ -3,6 +3,7 @@ local Host=require('domain.sync_transport')
 local Sync=require('domain.sync')
 local M={FILE='github-connection.json',MAX_BYTES=2048}
 function M.new(config)
+  local file=config.profile and ('gh'..config.profile..'-'..M.FILE)or M.FILE
   local binding={client_id=config.client_id,app_id=config.app_id,login=config.login,
     repo=config.scope.repo,branch=config.scope.branch,repository_id=config.repository_id}
   local function valid(v)
@@ -27,10 +28,10 @@ function M.new(config)
     return valid(v)and v or nil
   end
   function c:load(ctx)
-    local size,err=Host.call(ctx.storage,'size',M.FILE)
+    local size,err=Host.call(ctx.storage,'size',file)
     if size==nil then if err=='not_found'then return false end;return nil,'connection_read_failed'end
     if not Host.integer(size,1,M.MAX_BYTES)then return nil,'invalid_saved_connection'end
-    local raw=Host.call(ctx.storage,'read',M.FILE)
+    local raw=Host.call(ctx.storage,'read',file)
     if type(raw)~='string'or #raw~=size then return nil,'connection_read_failed'end
     local value=Host.call(ctx.json,'decode',raw)
     if not valid(value)then return nil,'invalid_saved_connection'end
@@ -40,12 +41,12 @@ function M.new(config)
     if not valid(v)then return nil,'invalid_saved_connection'end
     local raw=Host.call(ctx.json,'encode',v)
     if type(raw)~='string'or #raw>M.MAX_BYTES then return nil,'connection_write_failed'end
-    if not Host.call(ctx.storage,'write',M.FILE,raw)or Host.call(ctx.storage,'read',M.FILE)~=raw then return nil,'connection_write_failed'end
+    if not Host.call(ctx.storage,'write',file,raw)or Host.call(ctx.storage,'read',file)~=raw then return nil,'connection_write_failed'end
     return true
   end
   function c:forget(ctx)
-    if not Host.call(ctx.storage,'remove',M.FILE)then return nil,'connection_remove_failed'end
-    local size,err=Host.call(ctx.storage,'size',M.FILE)
+    if not Host.call(ctx.storage,'remove',file)then return nil,'connection_remove_failed'end
+    local size,err=Host.call(ctx.storage,'size',file)
     if size~=nil or err~='not_found'then return nil,'connection_remove_failed'end
     return true
   end

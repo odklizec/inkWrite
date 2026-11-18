@@ -4,7 +4,7 @@ local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
 local SyncUI=require('domain.sync_ui')
-local M={VERSION="1.0.19"}
+local M={VERSION="1.0.20"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 -- Typing pacing. None of these shorten the panel's own frame time; they keep
@@ -685,6 +685,7 @@ function M.load(ctx)
     if not ok then ctx.state.screen_orientation=nil end
   end
   A.ui_small=preferred_font(ctx,20);A.ui_medium=preferred_font(ctx,24);A.ui_large=preferred_font(ctx,30)
+  local setup=require('domain.sync_setup').new(ctx)
   A.sync=SyncUI.new({
     reserved_name=function()return A.doc and A.doc.name end,
     can_import=function()return not A.blocked end,
@@ -731,7 +732,7 @@ function M.load(ctx)
       local bytes=A.buffer:text()
       if bytes~=A.doc.base or Docs.read(c,A.doc.name)~=bytes then return nil end
       return {identity=A.doc,name=A.doc.name,revision=A.buffer.revision,bytes=bytes,saved=true,exists=true}
-    end},A.ui_small,A.ui_medium)
+    end},A.ui_small,A.ui_medium,{setup=setup,config=setup.config})
   A.sync.auto:load(ctx,ctx.state.github_sync_auto==false)
   A.font_name="";A.font_px=A.large and 30 or 24
   A.spacing=(ctx.state.spacing==4 or ctx.state.spacing==14) and ctx.state.spacing or 8

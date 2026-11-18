@@ -3,8 +3,12 @@ local Config=require('domain.sync_config')
 local Automatic=require('domain.sync_auto')
 local ApprovalQR=require('domain.approval_qr')
 local ReviewText=require('domain.sync_review')
+local SetupUI=require('domain.sync_setup_ui')
+local Primitives=require('domain.sync_primitives')
 local M={}
 function M.new(hooks,small,title,dependencies)
+  local d=dependencies or {};local config=d.config or Config;local manager=d.setup
+  local wizard
   local s=Session.new(hooks,dependencies)
   local auto=Automatic.new(s,hooks,dependencies)
   s.on_checkpoint=function(ctx,name,fingerprint)auto:ack(ctx,name,fingerprint)end
@@ -31,6 +35,7 @@ function M.new(hooks,small,title,dependencies)
       rows[#rows+1]={label='Version history: current document',action='current_history'}
       rows[#rows+1]={label='Automatic uploads: '..(ctx.state.github_sync_auto==true and 'On'or 'Off'),action='auto_settings'}
       rows[#rows+1]={label='Review current document versions',action='review'}
+      if manager then rows[#rows+1]={label='GitHub setup / change repository',action='setup_open'}end
     elseif u.page=='auto'then
       rows={{label=ctx.state.github_sync_auto==true and 'Turn automatic uploads Off'or 'Enable automatic uploads',action='auto_toggle'},
         {label='Upload delay: '..((ctx.state.github_sync_delay==15 or ctx.state.github_sync_delay==60)and ctx.state.github_sync_delay or 30)..' seconds',action='auto_delay'},
@@ -85,7 +90,7 @@ function M.new(hooks,small,title,dependencies)
     end
     local approving=status.user_code~=nil and u.page=='main'
     if approving then rows={{label='Cancel sign-in',action='cancel_auth'}}end
-    header={Config.scope.repo..' / '..Config.scope.branch,'Status: '..status.state:gsub('_',' '),s.notice}
+    header={config.scope.repo..' / '..config.scope.branch,'Status: '..status.state:gsub('_',' '),s.notice}
     local status_lines=1
     if u.page=='main'and not status.user_code then
       header[2]=header[2]..'\n'..s.file_status;status_lines=2
@@ -126,14 +131,23 @@ function M.new(hooks,small,title,dependencies)
     if u.page=='update'then header[3]='Only GitHub changed. A local backup is kept before updating.'end
     if u.page=='connect'then header[3]='Save GitHub login unencrypted on SD.\nAnyone with the card can recover it.'end
     if u.page=='remember'then header[3]='Save GitHub login unencrypted on SD.\nAnyone with the card can recover it.'end
+    if wizard and wizard.active then
+      rows,header,status=wizard:view(ctx);approving=status.user_code~=nil;status_lines=1
+    end
     local o=ctx.screen.occlusion or {};local x,y=(o.left or 0)+16,(o.top or 0)+12
     local w=ctx.screen.width-(o.right or 0)-x-16
     local bottom=ctx.screen.height-(o.bottom or 0)-18
     local notice_lines=(u.page=='remember'or u.page=='connect'or u.page=='auto')and (w>=640 and 3 or 4)or 2
+    if wizard and wizard.active then notice_lines=wizard.page=='setup_help'and 6 or (approving and 2 or 4) end
     if u.page=='review_text'then notice_lines=0 end
     if u.page=='resolve_local'or u.page=='resolve_github'then notice_lines=4 end
-    local line=small.line_height+4;local top=y+title.line_height+8+line*(1+status_lines+notice_lines)
+    local line=small.line_height+4
     local rh=math.max(44,small.line_height+12)
+    if wizard and wizard.active then
+      local room=bottom-48-(y+title.line_height+8)-line*(1+status_lines)-rh
+      notice_lines=math.max(0,math.min(notice_lines,room//line))
+    end
+    local top=y+title.line_height+8+line*(1+status_lines+notice_lines)
     local qr
     if approving then
       local available=math.min(w,bottom-top-48-rh-10,222)
@@ -153,11 +167,39 @@ function M.new(hooks,small,title,dependencies)
       u.reader:prepare(ctx,small,w,footer_y-top-8)
       geometry.page=u.reader.page;geometry.pages=u.reader.page+(u.reader.more and 1 or 0)
     end
-    local next_key=table.concat({u.page,u.focus,status.state,status.user_code or '',tostring(status.busy),status.reason or '',status.remember_error or '',tostring(s.busy),s.file_status,tostring(ctx.state.github_sync_enabled),tostring(ctx.state.github_sync_remember),s.notice,s.review and s.review.name or '',u.reader and u.reader.side or '',u.reader and u.reader.page or 0,auto.notice,tostring(ctx.state.github_sync_auto),tostring(ctx.state.github_sync_delay),#auto.items,#rows,s.history and s.history.page or 0,s.history and s.history.anchor or '',w,bottom},'|')
+    local next_key=table.concat({u.page,u.focus,status.state,status.user_code or '',tostring(status.busy),status.reason or '',status.remember_error or '',tostring(s.busy),s.file_status,tostring(ctx.state.github_sync_enabled),tostring(ctx.state.github_sync_remember),s.notice,s.review and s.review.name or '',u.reader and u.reader.side or '',u.reader and u.reader.page or 0,auto.notice,tostring(ctx.state.github_sync_auto),tostring(ctx.state.github_sync_delay),#auto.items,#rows,wizard and wizard.active and wizard.page or '',table.concat(header,'|'),s.history and s.history.page or 0,s.history and s.history.anchor or '',w,bottom},'|')
     if key~=next_key then key=next_key;ctx:invalidate()end
   end
-  function u:open(ctx)auto:interrupt(ctx);auto:load(ctx);self.active=true;self.page='main';self.focus=1;key=nil;s:open(ctx);prepare(ctx)end
+  local function setup_locked()return manager and (manager.error or not manager.config)end
+  if manager then
+    wizard=SetupUI.new(manager,function(ctx,next_config,selected,candidate)
+      auto:interrupt(ctx)
+      if auto.dirty and not auto:flush(ctx)then return nil,'Could not save the old upload queue. Retry before switching.'end
+      s:disconnect(ctx);u.pending=nil
+      ctx.state.github_sync_auto=false;ctx.state.github_sync_enabled=false;ctx.state.github_sync_remember=false
+      local final,e=manager:save(next_config,selected)
+      if not final then return nil,e end
+      local p=d.primitives or Primitives.new(ctx)
+      if candidate and not candidate:activate_setup(ctx,final)then candidate:disconnect();candidate=nil end
+      config=final
+      local next_dependencies={config=config,primitives=p,auth=candidate}
+      s=Session.new(hooks,next_dependencies);auto=Automatic.new(s,hooks,next_dependencies)
+      s.on_checkpoint=function(c,name,fingerprint)auto:ack(c,name,fingerprint)end
+      u.session=s;u.auto=auto;u.page='main';u.focus=1
+      s.notice=candidate and 'Setup saved. Connected; automatic uploads Off.'or 'Setup selected. Connect to verify access; automatic uploads Off.'
+      return final
+    end,d)
+    u.setup=wizard
+  end
+  function u:open(ctx)
+    auto:interrupt(ctx);auto:load(ctx);self.active=true;self.page='main';self.focus=1;key=nil
+    if setup_locked()then wizard:open()else s:open(ctx)end;prepare(ctx)
+  end
   local function back(ctx)
+    if wizard and wizard.active then
+      local root=wizard.page=='setup';wizard:back();u.focus=1
+      if root and setup_locked()then u.active=false;ctx:invalidate()else prepare(ctx)end;return
+    end
     if u.pending then u.pending=nil;s:disconnect(ctx)end
     if s.busy then s:disconnect(ctx)end
     if u.page=='main'then s:close(ctx);u.active=false;ctx:invalidate()
@@ -177,7 +219,8 @@ function M.new(hooks,small,title,dependencies)
     else u.page='connect';u.focus=1 end
   end
   local function perform(ctx,r)
-    if r.action=='cancel_auth'then u.pending=nil;s:disconnect(ctx);u.focus=1
+    if r.action=='setup_open'then auto:interrupt(ctx);wizard:open();u.focus=1
+    elseif r.action=='cancel_auth'then u.pending=nil;s:disconnect(ctx);u.focus=1
     elseif r.action=='review'then
       u.review_origin=r.origin=='auto'and 'auto'or 'main';u.reader=nil;s:review_document(ctx,r.file and r.file.name)
     elseif r.action=='read_local'or r.action=='read_github'then
@@ -249,6 +292,11 @@ function M.new(hooks,small,title,dependencies)
   end
   local function activate(ctx,index)
     local r=rows[index];if not r then return end
+    if wizard and wizard.active then
+      if r.action=='setup_cancel'then wizard:back()else wizard:perform(ctx,r)end
+      u.focus=1;prepare(ctx);return
+    end
+    if setup_locked()then wizard:open();u.focus=1;prepare(ctx);return end
     if r.action=='review'then r.origin=u.page end
     if r.action=='back'then back(ctx);return end
     if s.busy then return end
@@ -266,11 +314,11 @@ function M.new(hooks,small,title,dependencies)
     if target>=1 and target<=geometry.pages then u.focus=(target-1)*geometry.per+1 end
   end
   function u:review_document(ctx,name)
-    self:open(ctx);local r={action='review',file=name and {name=name},origin='main'}
+    self:open(ctx);if setup_locked()then return end;local r={action='review',file=name and {name=name},origin='main'}
     status=s:status(ctx)
     if not status.connected or status.busy then self.pending=r;connect(ctx);prepare(ctx);continue_pending(ctx)else perform(ctx,r)end
   end
-  function u:sync_document(ctx)self:open(ctx);activate(ctx,1);prepare(ctx)end
+  function u:sync_document(ctx)self:open(ctx);if not setup_locked()then activate(ctx,1)end;prepare(ctx)end
   function u:input(ctx,ev)
     if ev.type=='key'then
       if ev.key=='back'and ev.phase=='up'then back(ctx)
@@ -302,12 +350,13 @@ function M.new(hooks,small,title,dependencies)
   end
   function u:tick(ctx)
     auto:flush(ctx)
-    if status.state=='authorizing'then s:poll(ctx)end
+    if wizard and wizard.active then wizard:tick(ctx);prepare(ctx);return end
+    if s:status(ctx).state=='authorizing'then s:poll(ctx)end
     continue_pending(ctx);prepare(ctx)
   end
   function u:pause(ctx)auto:pause(ctx);s:pause(ctx);key=nil;if self.active then prepare(ctx)end end
-  function u:resume(ctx)auto:resume(ctx);if self.active then key=nil;s:open(ctx);prepare(ctx)end end
-  function u:leave(ctx)auto:pause(ctx,true);self.pending=nil;s:leave(ctx)end
+  function u:resume(ctx)auto:resume(ctx);if self.active then key=nil;if not(wizard and wizard.active)then s:open(ctx)end;prepare(ctx)end end
+  function u:leave(ctx)if wizard then wizard:cancel()end;auto:pause(ctx,true);self.pending=nil;s:leave(ctx)end
   function u:draw(ctx,g)
     local l=geometry;g:clear(0)
     g:text(l.x,l.y,'GitHub sync',{font=title,color=15})

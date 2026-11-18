@@ -7,7 +7,7 @@ for _,dims in ipairs({{480,800},{800,480}})do
  for _,height in ipairs({24,44})do
   local drawing=false;local calls=0;local private={};local files={['ideas.md']='Žluťoučký\r\n'}
   local font={line_height=height,measure=function(_,v)return (utf8.len(v)or 0)*10 end}
-  local c={state={last='ideas.md'},screen={width=dims[1],height=dims[2],occlusion={left=8,right=8,top=8,bottom=8}},fonts={small=font,medium=font,large=font},clock={},input={},budget={}}
+  local c={state={last='ideas.md',github_sync_enabled=true},screen={width=dims[1],height=dims[2],occlusion={left=8,right=8,top=8,bottom=8}},fonts={small=font,medium=font,large=font},clock={},input={},budget={}}
   local function outside()check(not drawing,'no filesystem/network/font work in draw')end
   c.fonts.size=function()outside();return font end
   c.clock.millis=function()return 0 end;c.clock.now=function()return {valid=false}end
@@ -20,7 +20,7 @@ for _,dims in ipairs({{480,800},{800,480}})do
   c.net={request=function()outside();calls=calls+1;return nil,'no_network'end}
   c.invalidate=function()end;c.set_tick=function()end;c.defer_full_refresh=function()end
   c.after=function()return {cancel=function()end}end
-  App.load(c);local a=app_state()
+  App.load(c);c.state.github_sync_enabled=false;local a=app_state()
   local function key(code)App.input(c,{type='key',source='keyboard',phase='down',code=code,mods={}})end
   a.view='menu';a.focus=5
   local buffer,doc=a.buffer,a.doc;a.buffer:seek(3);a.anchor=0;a.top=2;a.focus_mode=true

@@ -40,32 +40,34 @@ local function decode(ctx,raw,scope,hash)
   local value=call(ctx.json,'decode',envelope.payload)
   return M.validate(value,scope)
 end
-function M.load(ctx,scope,hash)
+function M.load(ctx,scope,hash,file)
+  file=file or M.FILE
   if not Sync.scope_ok(scope)then return nil,'invalid_scope'end
-  local size,err=call(ctx.storage,'size',M.FILE)
+  local size,err=call(ctx.storage,'size',file)
   if size==nil then
     if err=='not_found'then return M.empty(scope),false end
     return nil,'metadata_read_failed'
   end
   if type(size)~='number'or size<0 or size>M.MAX_BYTES then return nil,'metadata_too_large'end
-  local raw=call(ctx.storage,'read',M.FILE)
+  local raw=call(ctx.storage,'read',file)
   if type(raw)~='string'or #raw~=size then return nil,'metadata_read_failed'end
   local clean,why=decode(ctx,raw,scope,hash)
   if not clean then return nil,why end
   return clean,raw
 end
-function M.save(ctx,value,scope,hash,expected)
+function M.save(ctx,value,scope,hash,expected,file)
+  file=file or M.FILE
   if expected~=false and type(expected)~='string'then return nil,'expected_revision_required'end
   local clean,err=M.validate(value,scope);if not clean then return nil,err end
-  local old,raw=M.load(ctx,scope,hash);if not old then return nil,raw end
+  local old,raw=M.load(ctx,scope,hash,file);if not old then return nil,raw end
   if raw~=expected then return nil,'metadata_changed'end
   local payload=call(ctx.json,'encode',clean)
   if type(payload)~='string'or #payload>M.MAX_BYTES then return nil,'metadata_encode_failed'end
   local checksum=Sync.digest(hash,payload);if not checksum then return nil,'fingerprint_failed'end
   local encoded=call(ctx.json,'encode',{format='inkwrite-sync-1',payload=payload,checksum=checksum})
   if type(encoded)~='string'or #encoded>M.MAX_BYTES then return nil,'metadata_too_large'end
-  if not call(ctx.storage,'write',M.FILE,encoded)then return nil,'metadata_write_failed'end
-  local verified=call(ctx.storage,'read',M.FILE)
+  if not call(ctx.storage,'write',file,encoded)then return nil,'metadata_write_failed'end
+  local verified=call(ctx.storage,'read',file)
   if verified~=encoded then return nil,'metadata_verify_failed'end
   return clean,encoded
 end
@@ -75,5 +77,11 @@ function M.checkpoint(value,name,record,scope)
   if not Sync.record_ok(name,record)then return nil,'invalid_record'end
   clean.documents[name]=record
   return M.validate(clean,scope)
+end
+function M.for_config(config)
+  local file=config.profile and ('gh'..config.profile..'-'..M.FILE)or M.FILE
+  return {checkpoint=M.checkpoint,
+    load=function(c,scope,hash)return M.load(c,scope,hash,file)end,
+    save=function(c,v,scope,hash,expected)return M.save(c,v,scope,hash,expected,file)end}
 end
 return M

@@ -18,13 +18,15 @@ local function only_one(items)
   return items[1]
 end
 local function config_ok(c)
-  return Sync.fields(c,{client_id=true,app_id=true,login=true,scope=true,repository_id=true})
+  return Sync.fields(c,{client_id=true,app_id=true,login=true,scope=true,repository_id=true,selectable=true,profile=true})
     and type(c.client_id)=='string'and #c.client_id>=8 and #c.client_id<=64
     and not c.client_id:find('[^A-Za-z0-9_.-]')and int(c.app_id,1,2147483647)
+    and (c.selectable==nil or c.selectable==true)and (c.profile==nil or int(c.profile,1,4))
     and login_ok(c.login)and Sync.scope_ok(c.scope)
     and (c.repository_id==nil or int(c.repository_id,1,2147483647))
 end
-function M.new(config,primitives)
+M.config_ok=config_ok
+function M.new(config,primitives,discovery)
   if not config_ok(config)then return nil,'setup_required'end
   if type(primitives)~='table'or type(primitives.hash)~='function'or type(primitives.codec)~='table'then return nil,'primitives_unavailable'end
   -- Copy public setup: mutating caller tables cannot retarget a live session.
@@ -33,6 +35,9 @@ function M.new(config,primitives)
   local narrowed_id=config.repository_id
   local credentials=Credentials.new(config)
   local saved_record,remember_error,saved=false,nil,false
+  local setup_pending,setup_ready,installation_id,candidates,branches,chosen
+  local selectable=config.selectable==true
+  local setup_uncommitted=discovery==true
   local owner,repo=scope.repo:match('^([^/]+)/(.+)$')
   local prefix='/repos/'..encode(owner)..'/'..encode(repo)
   local oauth=assert(Transport.new('https://github.com'))
@@ -48,6 +53,7 @@ function M.new(config,primitives)
     token=nil;token_start=nil;token_ms=nil;device_code=nil;user_code=nil
     code_start=nil;code_ms=nil;last_poll=nil;interval=nil;verified=false
     account_id=nil;repository_id=nil;state=next_state;reason=why
+    setup_ready=nil;setup_pending=nil;candidates=nil;branches=nil;chosen=nil;installation_id=nil
   end
   local function valid_token(ctx)
     if not token then return false end
@@ -61,7 +67,7 @@ function M.new(config,primitives)
     stop(next_state,err)
     local invalid={account_mismatch=true,installation_scope_mismatch=true,
       repository_scope_mismatch=true,branch_mismatch=true,bad_refresh_token=true,expired_token=true}
-    if ctx and invalid[err]and ctx.state.github_sync_remember==true then
+    if ctx and not setup_uncommitted and invalid[err]and ctx.state.github_sync_remember==true then
       local ok,e=credentials:forget(ctx);saved=false;saved_record=nil;remember_error=ok and nil or e
     end
   end
@@ -91,7 +97,7 @@ function M.new(config,primitives)
     if not valid_token(ctx)then fn(ctx,{err='session_expired'});return end
     send(ctx,api,{path=path,method='GET',headers=headers(true),response_limit=49152},fn)
   end
-  local function validate_access(ctx,done)
+  local function validate_legacy(ctx,done)
     get(ctx,'/user',function(c,r)
       local u=r.data
       if r.err or r.status~=200 then done(c,nil,response_error(r));return end
@@ -145,12 +151,148 @@ function M.new(config,primitives)
       end)
     end)
   end
+  -- Setup may discover several selected repositories. Legacy connections retain
+  -- the original single-installation/single-repository restriction.
+  local function array(t,limit)
+    if type(t)~='table'then return nil end
+    local n=0;for k in pairs(t)do n=n+1;if not int(k,1,limit)then return nil end end
+    for i=1,n do if type(t[i])~='table'then return nil end end
+    return n<=limit and n or nil
+  end
+  local function installation(ctx,done)
+    get(ctx,'/user',function(c,r)
+      local u=r.data
+      if r.err or r.status~=200 then done(c,nil,response_error(r));return end
+      if type(u)~='table'or not login_ok(u.login)or u.login:lower()~=expected_login:lower()
+        or not int(u.id,1,2147483647)or (account_id and account_id~=u.id)then done(c,nil,'account_mismatch');return end
+      account_id=u.id
+      get(c,'/user/installations?per_page=20&page=1',function(c2,r2)
+        local d=r2.data
+        if r2.err or r2.status~=200 then done(c2,nil,response_error(r2));return end
+        if type(d)~='table'or not int(d.total_count,0,20)or array(d.installations,20)~=d.total_count then done(c2,nil,'installation_limit');return end
+        local match
+        for _,v in ipairs(d.installations)do
+          if v.app_id==app_id then
+            if match then done(c2,nil,'installation_scope_mismatch');return end
+            match=v
+          end
+        end
+        if not match then done(c2,nil,'app_not_installed');return end
+        if not int(match.id,1,2147483647)or match.repository_selection~='selected'
+          or c2.json.null==nil or match.suspended_at~=c2.json.null or type(match.account)~='table'
+          or type(match.account.login)~='string'or match.account.login:lower()~=expected_login:lower()
+          or not Sync.fields(match.permissions,{contents=true,metadata=true})
+          or match.permissions.contents~='write'or match.permissions.metadata~='read'then done(c2,nil,'installation_scope_mismatch');return end
+        installation_id=match.id;done(c2,true)
+      end)
+    end)
+  end
+  local function repo_ok(v)
+    return type(v)=='table'and int(v.id,1,2147483647)and type(v.full_name)=='string'
+      and Sync.scope_ok({repo=v.full_name,branch='main'})
+      and v.full_name:match('^([^/]+)/'):lower()==expected_login:lower()
+      and v.private==true and type(v.permissions)=='table'and v.permissions.push==true
+  end
+  local function repo_page(ctx,page,done)
+    get(ctx,'/user/installations/'..string.format('%d',installation_id)..'/repositories?per_page=10&page='..page,function(c,r)
+      if r.err or r.status~=200 then done(c,nil,response_error(r));return end
+      local d=r.data;local n=type(d)=='table'and array(d.repositories,10)
+      if not n or not int(d.total_count,0,100)then done(c,nil,'repository_limit');return end
+      local rows={};for _,v in ipairs(d.repositories)do if repo_ok(v)then rows[#rows+1]={id=v.id,full_name=v.full_name}end end
+      done(c,{rows=rows,page=page,more=page*10<d.total_count})
+    end)
+  end
+  local function validate_selected(ctx,done)
+    installation(ctx,function(c,ok,err)
+      if not ok then done(c,nil,err);return end
+      if discovery then setup_ready=true;done(c,true);return end
+      local function find(c2,page)
+        repo_page(c2,page,function(c3,result,e)
+          if not result then done(c3,nil,e);return end
+          local found
+          for _,v in ipairs(result.rows)do
+            if v.full_name:lower()==scope.repo:lower()and (not narrowed_id or v.id==narrowed_id)
+              and (not repository_id or v.id==repository_id)then found=v;break end
+          end
+          if not found then if result.more and page<10 then find(c3,page+1)else done(c3,nil,'repository_scope_mismatch')end;return end
+          get(c3,prefix,function(c4,r)
+            local v=r.data
+            if r.err or r.status~=200 then done(c4,nil,response_error(r));return end
+            if not repo_ok(v)or v.id~=found.id or v.full_name:lower()~=scope.repo:lower()
+              or v.visibility~='private'or v.archived~=false or v.disabled~=false then done(c4,nil,'repository_scope_mismatch');return end
+            get(c4,prefix..'/branches/'..encode(scope.branch),function(c5,r5)
+              local b=r5.data
+              if r5.err or r5.status~=200 then done(c5,nil,response_error(r5));return end
+              if type(b)~='table'or b.name~=scope.branch or type(b.commit)~='table'or not Sync.hex_ok(b.commit.sha,40)then done(c5,nil,'branch_mismatch');return end
+              if not valid_token(c5)then done(c5,nil,'session_expired');return end
+              repository_id=found.id;verified=true;done(c5,true,nil,b.commit.sha)
+            end)
+          end)
+        end)
+      end
+      find(c,1)
+    end)
+  end
+  local function validate_access(ctx,done)
+    if selectable then validate_selected(ctx,done)else validate_legacy(ctx,done)end
+  end
+  function s:setup_repos(ctx,page,done)
+    if not discovery or not setup_ready or busy or not int(page,1,10)then return nil,'setup_not_ready'end
+    busy=true;candidates=nil;branches=nil;chosen=nil
+    repo_page(ctx,page,function(c,result,e)
+      busy=false;if not result then failure(e,c)else candidates=result.rows end
+      done(c,result,e)
+    end);return true
+  end
+  function s:setup_branches(ctx,record,page,done)
+    if not discovery or not setup_ready or busy or not int(page,1,10)then return nil,'setup_not_ready'end
+    local candidate
+    for _,v in ipairs(candidates or {})do if v==record then candidate=v end end
+    if not candidate then return nil,'invalid_repository'end
+    chosen=candidate;branches=nil;busy=true
+    get(ctx,'/repos/'..encode(expected_login)..'/'..encode(candidate.full_name:match('/(.+)$'))..'/branches?per_page=10&page='..page,function(c,r)
+      busy=false
+      if r.err or r.status~=200 then local e=response_error(r);failure(e,c);done(c,nil,e);return end
+      local n=array(r.data,10);local rows={}
+      if n then for _,b in ipairs(r.data)do
+        if not Sync.scope_ok({repo=candidate.full_name,branch=b.name})or type(b.commit)~='table'or not Sync.hex_ok(b.commit.sha,40)then n=nil;break end
+        rows[#rows+1]={name=b.name}
+      end end
+      if not n then failure('branch_mismatch',c);done(c,nil,'branch_mismatch');return end
+      branches=rows;done(c,{rows=rows,page=page,more=n==10 and page<10})
+    end);return true
+  end
+  function s:bind_setup(ctx,branch,done)
+    if not discovery or not setup_ready or busy or not chosen then return nil,'setup_not_ready'end
+    local found;for _,v in ipairs(branches or {})do if v==branch then found=true end end
+    if not found then return nil,'invalid_branch'end
+    scope={repo=chosen.full_name,branch=branch.name};owner,repo=scope.repo:match('^([^/]+)/(.+)$')
+    prefix='/repos/'..encode(owner)..'/'..encode(repo);narrowed_id=chosen.id
+    discovery=false;busy=true;state='verifying'
+    validate_selected(ctx,function(c,ok,e)
+      busy=false
+      if not ok then failure(e,c);done(c,nil,e);return end
+      state='connected';setup_ready=nil
+      done(c,{client_id=client_id,app_id=app_id,login=expected_login,scope={repo=scope.repo,branch=scope.branch},repository_id=repository_id,selectable=true})
+    end);return true
+  end
+  function s:activate_setup(ctx,final)
+    if not verified or not valid_token(ctx)or not config_ok(final)or final.client_id~=client_id or final.app_id~=app_id
+      or final.login~=expected_login or final.scope.repo~=scope.repo or final.scope.branch~=scope.branch
+      or final.repository_id~=repository_id then return nil,'setup_not_ready'end
+    credentials=Credentials.new(final);setup_uncommitted=false
+    if setup_pending then
+      setup_pending.account_id=account_id;setup_pending.verified_repository_id=repository_id
+      saved_record=credentials:record(setup_pending);setup_pending=nil
+    end
+    return true
+  end
   local function epoch(ctx)
     local t=Transport.call(ctx.clock,'now')
     return type(t)=='table'and t.valid==true and int(t.epoch_sec,1,2147483647)and t.epoch_sec or nil
   end
   local function persist(ctx)
-    if ctx.state.github_sync_remember~=true then return true end
+    if setup_uncommitted or ctx.state.github_sync_remember~=true then return true end
     if not saved_record then saved=false;remember_error=remember_error or 'remember_requires_signin';return nil end
     local ok,e=credentials:save(ctx,saved_record);saved=ok==true;remember_error=e;return ok
   end
@@ -196,12 +338,13 @@ function M.new(config,primitives)
     state='verifying';busy=true
     validate_access(c,function(c2,ok,err)
       busy=false;if not ok then failure(err,c2);return end
-      if pending then
+      if pending and not discovery then
         pending.account_id=account_id;pending.verified_repository_id=repository_id
         saved_record=credentials:record(pending)
       end
-      if not refreshing then persist(c2)end
-      state='connected';reason=nil
+      if discovery then setup_pending=pending;saved_record=nil
+      elseif not refreshing then persist(c2)end
+      state=discovery and 'setup_ready'or 'connected';reason=nil
       if c2.invalidate then c2:invalidate()end
     end)
   end
@@ -223,7 +366,7 @@ function M.new(config,primitives)
   end
   function s:restore(ctx)
     if busy then return nil,'busy'end
-    if ctx.state.github_sync_remember~=true then return false end
+    if setup_uncommitted or ctx.state.github_sync_remember~=true then return false end
     local record,e=credentials:load(ctx)
     if not record then
       saved=false;remember_error=e
@@ -260,8 +403,8 @@ function M.new(config,primitives)
       local now=clock(ctx)
       if not now or age(now,code_start)>=code_ms then stop('auth_required','code_expired')end
     end
-    return {state=state,reason=reason,http_status=http_status,busy=busy,connected=verified and token~=nil,
-      login=verified and expected_login or nil,repo=scope.repo,branch=scope.branch,
+    return {state=state,reason=reason,setup_ready=setup_ready==true,http_status=http_status,busy=busy,connected=verified and token~=nil,
+      login=(verified or setup_ready)and expected_login or nil,repo=scope.repo,branch=scope.branch,
       user_code=user_code,verification_uri=user_code and M.VERIFY_URL or nil,
       remembered=saved,remember_error=remember_error}
   end
@@ -433,5 +576,10 @@ function M.new(config,primitives)
     return true
   end
   return s
+end
+function M.setup(public,primitives)
+  if type(public)~='table'or not login_ok(public.login)then return nil,'setup_required'end
+  return M.new({client_id=public.client_id,app_id=public.app_id,login=public.login,
+    scope={repo=public.login..'/pending-setup',branch='main'},selectable=true},primitives,true)
 end
 return M

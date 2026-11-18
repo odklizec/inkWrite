@@ -8,12 +8,14 @@ local Config=require('domain.sync_config')
 local M={}
 function M.new(hooks,dependencies)
   local d=dependencies or {};local config=d.config or Config
-  local auth,p,serial=nil,nil,0
+  local Store=Store.for_config(config)
+  local auth,p,serial=d.auth,d.primitives,0
   local reconnect_allowed=true
   local s={notice='Manual sync. Local saves stay on the SD card.',rows={},busy=false,file_status='Saved locally'}
   local function notify(ctx,text)s.notice=text;ctx:invalidate()end
   local function wifi(ctx,ms)if ctx.net and ctx.net.keep_wifi then pcall(ctx.net.keep_wifi,ctx.net,ms)end end
   local function ready(ctx)
+    p=p or d.primitives or Primitives.new(ctx)
     if not auth then
       p=d.primitives or Primitives.new(ctx)
       if p then auth=(d.auth_factory or Auth.new)(config,p)end

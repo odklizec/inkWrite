@@ -1,14 +1,14 @@
 # Set up Direct GitHub for inkWrite
 
-The connection code is implemented and mock-tested. Live sign-in needs your own
-GitHub App and a separate private documents repository. The editor's sync screen
-comes in Phase 3; installing the current editor does not enable sign-in yet.
+Build 1.0.20 includes in-app setup. Use your own personal GitHub App and a
+separate private documents repository. No hosted companion, client secret,
+private key or permanent token is required.
 
 ## 1. Create a documents repository
 
 On GitHub, create a **private** repository, for example `inkwrite-docs`. Add a
 README so its `main` branch exists. Keep this separate from the `inkWrite` source
-repository. You can leave document creation to the later upload feature.
+repository. inkWrite uploads documents into its `documents/` folder.
 
 ## 2. Register a personal GitHub App
 
@@ -38,28 +38,33 @@ These are public identifiers, different from access tokens/client secrets.
 GitHub's [registration guide](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)
 describes these controls; labels may change slightly.
 
-## 3. Install it on one repository
+## 3. Install it on selected repositories
 
 From the App settings, choose Install App and select your own account. Choose
 **Only select repositories**, then select only your private documents repository.
 Review the Contents read/write and Metadata read permissions before installing.
 Do not choose all repositories or the inkWrite source repository.
 
-This first implementation deliberately rejects extra installations/repositories
-or additional App permissions. It checks that only the selected private repo is
-accessible; requesting a repository ID alone is not accepted as proof of scope.
-See GitHub's [installation access API](https://docs.github.com/en/rest/apps/installations).
+New setups list up to 100 selected repositories belonging to the signed-in
+personal account, showing only private repositories with push access. Additional
+App permissions and All repositories are rejected. Existing legacy connections
+retain their original one-repository checks until set up again.
 
-## 4. Send these public setup values
+## 4. Enter the public values in inkWrite
 
-- Public Client ID.
-- Numeric App ID.
-- Your GitHub login.
-- Documents repository, for example `odklizec/inkwrite-docs`.
-- Branch, normally `main`.
+Open **Settings > More > GitHub sync > GitHub setup / change repository**.
+On a fresh install, GitHub sync opens setup immediately.
 
-Do not send a client secret, private key, token, device code or authorization code.
-The repository ID is optional; the client verifies and binds the returned ID.
+1. Enter the public **Client ID**, numeric **App ID**, and your **GitHub login**.
+2. Choose **Sign in and choose repository**.
+3. Scan the QR or open `github.com/login/device`, enter the displayed code and approve.
+4. Select your private documents repository and existing branch.
+5. Review the destination and choose **Save and use this setup**.
+6. Optionally enable **Remember connection on this device** after reading its SD-storage notice.
+
+Enter these public values in the app; there is no need to send them in chat or
+edit source code. Never enter a client secret, private key or access token.
+See [setup behavior, limits and checks](GITHUB-GENERAL-SETUP-1.0.20.md).
 
 ## What sign-in will do
 
@@ -80,7 +85,9 @@ No client secret is embedded to perform management operations from the device.
 
 ## After setup
 
-Next: configure the public IDs, verify real HTTPS/auth on the test runtime and
-device, then integrate the manual sync UI in Phase 3. Live auth, revoked-token
-behavior, firmware networking/memory and physical-device acceptance are still
-**NOT TESTED**. Current passing tests are synthetic; no real token was used.
+Manual sync, version history, conflict review and optional automatic uploads use
+the selected destination. Switching setups leaves automatic uploads Off and
+keeps the old destination's queue and sync records isolated. Existing owner
+configuration is migrated without moving its records or reconnecting merely
+because of this update. This new setup flow is covered by synthetic tests and
+Studio preview; physical-device setup with another account remains to be tested.

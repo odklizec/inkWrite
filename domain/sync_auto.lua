@@ -12,7 +12,7 @@ local reasons={conflict=true,saved_file_changed=true,metadata_invalid=true,check
  io_error=true,busy=true,server_error=true,rate_limited=true,remote_race=true,other=true}
 local retry={interrupted=true,no_network=true,timeout=true,io_error=true,busy=true,server_error=true,remote_race=true,checkpoint_failed=true}
 function M.new(session,hooks,dependencies)
- local d=dependencies or {};local source=(d.config or Config).scope;local scope={repo=source.repo,branch=source.branch}
+ local d=dependencies or {};local config=d.config or Config;local file=config.profile and ('gh'..config.profile..'-'..M.FILE)or M.FILE;local source=config.scope;local scope={repo=source.repo,branch=source.branch}
  local q={items={},notice='Off',loaded=false,dirty=false,paused=false};local p,raw,active,last_input
  local function enabled(c)return c.state.github_sync_auto==true and c.state.github_sync_enabled==true end
  local function delay(c)local v=c.state.github_sync_delay;return (v==15 or v==60)and v*1000 or 30000 end
@@ -26,9 +26,9 @@ function M.new(session,hooks,dependencies)
   if c.budget then c.budget:extend()end
   self.loaded=true;last_input=now(c);p=d.primitives or Primitives.new(c)
   if not p then self.bad=true;self.notice='Automatic upload unavailable';return end
-  local size,e=Host.call(c.storage,'size',M.FILE)
+  local size,e=Host.call(c.storage,'size',file)
   if size==nil and e=='not_found'then raw=false;self.notice='No pending uploads';return end
-  local bytes=type(size)=='number'and size<=M.MAX_BYTES and size>=0 and Host.call(c.storage,'read',M.FILE)
+  local bytes=type(size)=='number'and size<=M.MAX_BYTES and size>=0 and Host.call(c.storage,'read',file)
   local env=type(bytes)=='string'and #bytes==size and Host.call(c.json,'decode',bytes)
   local value=type(env)=='table'and type(env.payload)=='string'and Host.call(c.json,'decode',env.payload)
   local valid=Sync.fields(env,{format=true,payload=true,checksum=true})and env.format=='inkwrite-auto-1'
@@ -61,10 +61,10 @@ function M.new(session,hooks,dependencies)
   local payload=Host.call(c.json,'encode',{schema=1,repo=scope.repo,branch=scope.branch,items=items})
   local checksum=type(payload)=='string'and digest(payload)
   local encoded=Sync.hex_ok(checksum,64)and Host.call(c.json,'encode',{format='inkwrite-auto-1',payload=payload,checksum=checksum})
-  local current,e=Host.call(c.storage,'read',M.FILE)
+  local current,e=Host.call(c.storage,'read',file)
   if current==nil and e=='not_found'then current=false end
   if current~=raw or type(encoded)~='string'or #encoded>M.MAX_BYTES
-   or not Host.call(c.storage,'write',M.FILE,encoded)or Host.call(c.storage,'read',M.FILE)~=encoded then
+   or not Host.call(c.storage,'write',file,encoded)or Host.call(c.storage,'read',file)~=encoded then
    self.bad=true;self.notice='Upload queue could not be saved; review settings';return false
   end
   raw=encoded;self.dirty=false;return true
@@ -107,7 +107,7 @@ function M.new(session,hooks,dependencies)
  function q:clear(c)
   self:interrupt(c);self.loaded=false;self.bad=nil;self.items={};p=d.primitives or Primitives.new(c)
   if not p then self.bad=true;self.notice='Automatic upload unavailable';return end
-  local v,e=Host.call(c.storage,'read',M.FILE)
+  local v,e=Host.call(c.storage,'read',file)
   if v==nil and e~='not_found'then self.bad=true;self.notice='Upload queue could not be read';return end
   raw=v or false
   self.loaded=true;self.dirty=true;self:flush(c);self.notice=self.bad and self.notice or 'Upload queue cleared'
