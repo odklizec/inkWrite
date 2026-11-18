@@ -56,8 +56,8 @@ Automated tests use synthetic GitHub responses, never real tokens or private
 documents. They cover the whole UI/Auth/Session handoff, remembered credentials,
 wrong account/permissions, forged/stale choices, failure during final binding,
 profile isolation, migration, bounded profiles, corrupt/failed/ambiguous storage
-and interrupted activation. Native preview checks the setup and system input;
-a second account and physical-device switching still need acceptance.
+and interrupted activation. Native preview is pending because XTApp Studio is timing out; a second
+account and physical-device switching also still need acceptance.
 
 Device checks:
 
