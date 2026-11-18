@@ -93,7 +93,7 @@ function M.new(session,hooks,dependencies)
    item.held=not (retry[why]or why=='rate_limited')or item.attempts>=3
    q.notice=item.held and ('Needs review: '..item.name)or ('Upload deferred: '..item.name)
   end
-  q.dirty=true
+  q.dirty=true;if c.invalidate then c:invalidate()end
  end
  function q:interrupt(c)
   if not enabled(c)and not active then return end

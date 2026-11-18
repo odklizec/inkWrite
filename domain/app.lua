@@ -4,7 +4,7 @@ local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
 local SyncUI=require('domain.sync_ui')
-local M={VERSION="1.0.17"}
+local M={VERSION="1.0.18"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 -- Typing pacing. None of these shorten the panel's own frame time; they keep
@@ -48,6 +48,23 @@ local function selection()
 end
 local function font(ctx)
   return A.body_font or A.ui_medium or ctx.fonts.medium
+end
+local function github_review_name()
+  if not A or not A.sync then return nil end
+  if A.sync.session.needs_review then return A.sync.session.needs_review end
+  local fallback
+  for _,v in ipairs(A.sync.auto.items)do if v.held then
+    if A.doc and v.name==A.doc.name then return v.name end
+    fallback=fallback or v.name
+  end end
+  return fallback
+end
+local function github_badge(ctx,l)
+  local name=github_review_name()
+  if not name or A.view~='editor'then return nil end
+  local width=math.max(100,A.ui_small:measure('GitHub !')+20)
+  local x=A.focus_mode and ((l.chrome_left+l.chrome_right-width)//2)or (l.chrome_right-44-width-8)
+  return {x=x,y=(ctx.screen.occlusion or {}).top or 0,w=width,h=44,name=name}
 end
 local function geometry(ctx)
   local o=ctx.screen.occlusion or {left=0,right=0,top=0,bottom=0}
@@ -669,6 +686,14 @@ function M.load(ctx)
     describe=function()return {name=A.doc and A.doc.name,dirty=A.dirty,blocked=A.blocked or A.save_failed}end,
     apply_remote=function(c,captured,text)
       extend_budget(c)
+      if captured.identity==captured.name then
+        if A.blocked or A.dirty or A.doc.name:lower()==captured.name:lower()then return nil end
+        local backup=Docs.update_from_remote(c,captured.name,captured.bytes,text)
+        if not backup then return nil end
+        local rec=Docs.load_recovery(c)
+        if rec and rec.name==captured.name and rec.text==captured.bytes then Docs.call(c.storage,'remove','recovery.txt')end
+        c:invalidate();return true,backup
+      end
       if A.blocked or A.dirty or A.doc~=captured.identity or A.buffer.revision~=captured.revision
         or A.doc.name~=captured.name or A.doc.base~=captured.bytes or A.buffer:text()~=captured.bytes then return nil end
       local next_buffer=Buffer.new(text);if not next_buffer then return nil end
@@ -687,7 +712,14 @@ function M.load(ctx)
       refresh_layout(c);c:invalidate()
       return true,backup
     end,
-    snapshot=function(c,save_first)
+    snapshot=function(c,save_first,target)
+      if target and A.doc and target~=A.doc.name then
+        if target:lower()==A.doc.name:lower()then return nil end
+        if A.blocked or (save_first and A.dirty and not save(c))then return nil end
+        local bytes=Docs.read(c,target)
+        if not bytes then return nil end
+        return {identity=target,name=target,bytes=bytes,saved=true,exists=true,revision=0}
+      end
       if A.blocked or not A.doc then return nil end
       if save_first and (A.dirty or A.doc.base==nil)and not save(c)then return nil end
       if A.dirty or A.doc.base==nil then return nil end
@@ -695,7 +727,7 @@ function M.load(ctx)
       if bytes~=A.doc.base or Docs.read(c,A.doc.name)~=bytes then return nil end
       return {identity=A.doc,name=A.doc.name,revision=A.buffer.revision,bytes=bytes,saved=true,exists=true}
     end},A.ui_small,A.ui_medium)
-  A.sync.auto:load(ctx)
+  A.sync.auto:load(ctx,ctx.state.github_sync_auto==false)
   A.font_name="";A.font_px=A.large and 30 or 24
   A.spacing=(ctx.state.spacing==4 or ctx.state.spacing==14) and ctx.state.spacing or 8
   A.margin=(ctx.state.margin==40 or ctx.state.margin==56) and ctx.state.margin or 24
@@ -846,7 +878,8 @@ local function keyboard(ctx,ev)
   if A.view=='editor'and code=='KeyG'and shortcut and not mods.shift then
     if down then
       cancel_navigation();cancel_redraw();A.keyboard:reset();A.typing_time=nil;A.panel=nil;A.action_focus=nil
-      A.sync:sync_document(ctx)
+      local review=github_review_name()
+      if review then A.sync:review_document(ctx,review)else A.sync:sync_document(ctx)end
     end
     return true
   end
@@ -1112,6 +1145,11 @@ function M.input(ctx,ev)
   if ev.type=="pointer" and (type(ev.x)~="number" or type(ev.y)~="number" or ev.x~=ev.x or ev.y~=ev.y or ev.x<0 or ev.y<0 or ev.x>=ctx.screen.width or ev.y>=ctx.screen.height) then return true end
   -- Notices belong to the action that produced them. Dismiss on the next
   -- deliberate action, not on pointer movement or the trailing key release.
+  local badge=github_badge(ctx,geometry(ctx))
+  if not A.close_modal and not A.languages and badge and ev.type=='pointer'and ev.phase=='up'and (ev.gesture=='tap'or ev.gesture=='double_tap')
+    and ev.x>=badge.x and ev.x<badge.x+badge.w and ev.y>=badge.y and ev.y<badge.y+badge.h then
+    cancel_navigation();A.sync:review_document(ctx,badge.name);return true
+  end
   -- Save/protection state stays independent and is still shown in the chrome.
   local action=ev.type=="pointer" and ev.phase=="up" or ev.type=="key" and (ev.phase=="down" or ev.phase=="repeat" or ev.key=="back" and ev.phase=="up")
   if action and A.message then A.message=nil;ctx:invalidate() end
@@ -1559,14 +1597,19 @@ local function editor_chrome(ctx,g,l)
   local focused=A.focus_mode and A.view=="editor"
   local y=top+(focused and 20 or 50)
   local code=Keyboard.code(A.keyboard.id)
+  local badge=github_badge(ctx,l)
   if not focused then
     local titles={menu="More",library="Open file",typography="Typography",fonts="Fonts",layouts="Keyboard",font_help="Fonts",orientation_help="Screen rotate",files_help="SD files",help="Shortcuts",delete_confirm="Delete file?",statistics="Statistics",timing="Memory & timing"}
-    box(g,A.ui_medium,l.chrome_left,top+2,l.chrome_right-l.chrome_left-(A.view=="menu" and 120 or A.view=="editor" and 44 or 0),36,titles[A.view] or A.doc.name)
+    box(g,A.ui_medium,l.chrome_left,top+2,l.chrome_right-l.chrome_left-(A.view=="menu" and 120 or A.view=="editor" and 44 or 0)-(badge and badge.w+8 or 0),36,titles[A.view] or A.doc.name)
     if A.view=="menu" then g:text(l.chrome_right,top+20,M.VERSION,{font=ui,align="right",valign="middle"}) end
     if A.view=="editor" then local x=l.chrome_right-22;g:line(x-7,top+13,x+7,top+27);g:line(x+7,top+13,x-7,top+27) end
     g:line(l.chrome_left,l.header,l.chrome_right,l.header)
     local status=A.blocked and "Protected" or A.save_failed and "SAVE FAILED" or A.dirty and "Unsaved" or "Saved"
     g:text((l.chrome_left+l.chrome_right)//2,y,status,{font=ui,align="center",valign="middle"})
+  end
+  if badge then
+    g:rect(badge.x,badge.y,badge.w,badge.h,{radius=4,line_width=2,color=15})
+    g:text(badge.x+badge.w//2,badge.y+badge.h//2,"GitHub !",{font=ui,align="center",valign="middle",color=15})
   end
   icon(g,"keyboard",l.chrome_left,y-8)
   g:text(l.chrome_left+27,y,code..(A.caps and " ^" or ""),{font=ui,valign="middle"})

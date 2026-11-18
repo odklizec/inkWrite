@@ -2,6 +2,7 @@ local Session=require('domain.sync_session')
 local Config=require('domain.sync_config')
 local Automatic=require('domain.sync_auto')
 local ApprovalQR=require('domain.approval_qr')
+local ReviewText=require('domain.sync_review')
 local M={}
 function M.new(hooks,small,title,dependencies)
   local s=Session.new(hooks,dependencies)
@@ -13,6 +14,9 @@ function M.new(hooks,small,title,dependencies)
     status=s:status(ctx)
     if not u.pending and s.conflict and u.page~='conflict'then u.page='conflict';u.focus=1 end
     if not u.pending and s.pending_update and u.page~='update'then u.page='update';u.focus=1 end
+    local reviewing=u.page=='review'or u.page=='review_text'or u.page=='resolve_local'or u.page=='resolve_github'
+    if s.review and not u.pending and not reviewing then u.page='review';u.focus=1 end
+    if reviewing and not s.review then u.page='main';u.reader=nil;u.focus=1 end
     rows={}
     if u.page=='main'then
       rows={{label='Sync this document',action='sync',primary=true},
@@ -26,12 +30,13 @@ function M.new(hooks,small,title,dependencies)
       end
       rows[#rows+1]={label='Version history: current document',action='current_history'}
       rows[#rows+1]={label='Automatic uploads: '..(ctx.state.github_sync_auto==true and 'On'or 'Off'),action='auto_settings'}
+      rows[#rows+1]={label='Review current document versions',action='review'}
     elseif u.page=='auto'then
       rows={{label=ctx.state.github_sync_auto==true and 'Turn automatic uploads Off'or 'Enable automatic uploads',action='auto_toggle'},
         {label='Upload delay: '..((ctx.state.github_sync_delay==15 or ctx.state.github_sync_delay==60)and ctx.state.github_sync_delay or 30)..' seconds',action='auto_delay'},
         {label='Retry pending uploads',action='auto_retry'},
         {label='Clear upload queue',action='auto_clear'}}
-      for _,v in ipairs(auto.items)do rows[#rows+1]={label=(v.held and 'Review: 'or 'Pending: ')..v.name,action='auto_info',file=v}end
+      for _,v in ipairs(auto.items)do rows[#rows+1]={label=(v.held and 'Review: 'or 'Pending: ')..v.name,action=v.reason=='conflict'and 'review'or 'auto_info',file=v}end
     elseif u.page=='remote'then
       rows[#rows+1]={label='Refresh remote folder',action='browse'}
       for _,r in ipairs(s.rows)do rows[#rows+1]={label=r.name,action='select',file=r}end
@@ -52,8 +57,18 @@ function M.new(hooks,small,title,dependencies)
     elseif u.page=='version'then
       rows={{label='Cancel',action='back'}}
       rows[#rows+1]={label='Restore as new local copy',action='restore_version',file=u.version}
+    elseif u.page=='review'then
+      rows={{label='Read local version',action='read_local'}}
+      if s.review.remote.exists then rows[#rows+1]={label='Read GitHub version',action='read_github'}end
+      if s.review.remote.exists then rows[#rows+1]={label='Use GitHub version locally...',action='choose_local'}end
+      rows[#rows+1]={label='Keep local version on GitHub...',action='choose_github'}
+      rows[#rows+1]={label='Refresh both versions',action='review',file={name=s.review.name}}
+    elseif u.page=='resolve_local'or u.page=='resolve_github'then
+      rows={{label='Cancel',action='back'},
+        {label=u.page=='resolve_local'and 'Replace local version'or 'Overwrite GitHub version',action=u.page=='resolve_local'and 'resolve_local'or 'resolve_github'}}
+    elseif u.page=='review_text'then rows={}
     elseif u.page=='conflict'then
-      rows={{label='Cancel',action='back'}}
+      rows={{label='Cancel',action='back'},{label='Review both versions',action='review'}}
       rows[#rows+1]={label='Upload local as NEW remote file',action='new'}
       if s.conflict and s.conflict.sha then rows[#rows+1]={label='Download remote as local copy',action='download',file=s.conflict}end
     elseif u.page=='update'then
@@ -100,6 +115,14 @@ function M.new(hooks,small,title,dependencies)
     end
     if u.page=='version'then header[3]=u.version.date..' '..u.version.sha:sub(1,7)..'\nOriginals kept; restore creates a copy.'end
     if u.page=='revoke'then header[3]='GitHub Settings > Applications > Authorized GitHub Apps. Revoke inkWrite; then disconnect here.'end
+    if s.review and (u.page=='review'or u.page=='review_text'or u.page=='resolve_local'or u.page=='resolve_github')then
+      header[1]='Review: '..s.review.name
+      header[2]='Local '..#s.review.file.bytes..' B / GitHub '..(s.review.remote.exists and #s.review.remote.bytes..' B'or 'missing')
+      header[3]=s.notice
+      if u.page=='review_text'then header[2]=(u.reader.side=='local'and 'Local version'or 'GitHub version')..' (read-only)';header[3]=''end
+      if u.page=='resolve_local'then header[3]='Replace local text with GitHub? A backup of local text is kept first.'end
+      if u.page=='resolve_github'then header[3]='Overwrite GitHub with local text? The reviewed GitHub version is backed up on SD first.'end
+    end
     if u.page=='update'then header[3]='Only GitHub changed. A local backup is kept before updating.'end
     if u.page=='connect'then header[3]='Save GitHub login unencrypted on SD.\nAnyone with the card can recover it.'end
     if u.page=='remember'then header[3]='Save GitHub login unencrypted on SD.\nAnyone with the card can recover it.'end
@@ -107,6 +130,8 @@ function M.new(hooks,small,title,dependencies)
     local w=ctx.screen.width-(o.right or 0)-x-16
     local bottom=ctx.screen.height-(o.bottom or 0)-18
     local notice_lines=(u.page=='remember'or u.page=='connect'or u.page=='auto')and (w>=640 and 3 or 4)or 2
+    if u.page=='review_text'then notice_lines=0 end
+    if u.page=='resolve_local'or u.page=='resolve_github'then notice_lines=4 end
     local line=small.line_height+4;local top=y+title.line_height+8+line*(1+status_lines+notice_lines)
     local rh=math.max(44,small.line_height+12)
     local qr
@@ -124,7 +149,11 @@ function M.new(hooks,small,title,dependencies)
     u.focus=math.max(1,math.min(#rows,u.focus))
     local page=((u.focus-1)//per)+1;local pages=math.max(1,(#rows+per-1)//per)
     geometry={x=x,y=y,w=w,bottom=bottom,page=page,pages=pages,touch_left=o.left or 0,touch_right=ctx.screen.width-(o.right or 0),touch_bottom=ctx.screen.height-(o.bottom or 0),footer_y=footer_y,footer_left=(o.left or 0)+20,footer_right=ctx.screen.width-(o.right or 0)-20,top=top,row=rh,per=per,first=((u.focus-1)//per)*per+1,line=line,notice_lines=notice_lines,status_lines=status_lines,qr=qr}
-    local next_key=table.concat({u.page,u.focus,status.state,status.user_code or '',tostring(status.busy),status.reason or '',status.remember_error or '',tostring(s.busy),s.file_status,tostring(ctx.state.github_sync_enabled),tostring(ctx.state.github_sync_remember),s.notice,auto.notice,tostring(ctx.state.github_sync_auto),tostring(ctx.state.github_sync_delay),#auto.items,#rows,s.history and s.history.page or 0,s.history and s.history.anchor or '',w,bottom},'|')
+    if u.page=='review_text'and u.reader then
+      u.reader:prepare(ctx,small,w,footer_y-top-8)
+      geometry.page=u.reader.page;geometry.pages=u.reader.page+(u.reader.more and 1 or 0)
+    end
+    local next_key=table.concat({u.page,u.focus,status.state,status.user_code or '',tostring(status.busy),status.reason or '',status.remember_error or '',tostring(s.busy),s.file_status,tostring(ctx.state.github_sync_enabled),tostring(ctx.state.github_sync_remember),s.notice,s.review and s.review.name or '',u.reader and u.reader.side or '',u.reader and u.reader.page or 0,auto.notice,tostring(ctx.state.github_sync_auto),tostring(ctx.state.github_sync_delay),#auto.items,#rows,s.history and s.history.page or 0,s.history and s.history.anchor or '',w,bottom},'|')
     if key~=next_key then key=next_key;ctx:invalidate()end
   end
   function u:open(ctx)auto:interrupt(ctx);auto:load(ctx);self.active=true;self.page='main';self.focus=1;key=nil;s:open(ctx);prepare(ctx)end
@@ -135,6 +164,8 @@ function M.new(hooks,small,title,dependencies)
     else
       local page=u.page
       s.conflict=nil;s.pending_update=nil;u.version=nil;u.selected=nil
+      if page=='review_text'or page=='resolve_local'or page=='resolve_github'then u.page='review';u.reader=nil;u.focus=1;prepare(ctx);return end
+      if page=='review'then s.review=nil;u.reader=nil;u.page=u.review_origin or 'main';u.focus=1;prepare(ctx);return end
       u.page=page=='version'and 'history'or (page=='history'and u.history_origin or 'main');u.focus=1;prepare(ctx)
     end
   end
@@ -147,6 +178,14 @@ function M.new(hooks,small,title,dependencies)
   end
   local function perform(ctx,r)
     if r.action=='cancel_auth'then u.pending=nil;s:disconnect(ctx);u.focus=1
+    elseif r.action=='review'then
+      u.review_origin=r.origin=='auto'and 'auto'or 'main';u.reader=nil;s:review_document(ctx,r.file and r.file.name)
+    elseif r.action=='read_local'or r.action=='read_github'then
+      u.reader=ReviewText.new(s.review,r.action=='read_local'and 'local'or 'github');u.page='review_text';u.focus=1
+    elseif r.action=='choose_local'or r.action=='choose_github'then
+      u.page=r.action=='choose_local'and 'resolve_local'or 'resolve_github';u.focus=1
+    elseif r.action=='resolve_local'or r.action=='resolve_github'then
+      s:resolve_review(ctx,r.action=='resolve_local'and 'local'or 'github');u.page='review';u.focus=1
     elseif r.action=='sync'then
       s:sync(ctx)
     elseif r.action=='auto_settings'then auto:load(ctx);u.page='auto';u.focus=1
@@ -196,7 +235,7 @@ function M.new(hooks,small,title,dependencies)
     elseif r.action=='retry_remember'then s:remember(ctx)end
     prepare(ctx)
   end
-  local network_actions={sync=true,browse=true,current_history=true,file_history=true,
+  local network_actions={review=true,resolve_local=true,resolve_github=true,sync=true,browse=true,current_history=true,file_history=true,
     history_refresh=true,history_prev=true,history_next=true,download=true,new=true,
     update_local=true,update_copy=true,restore_version=true}
   local function continue_pending(ctx)
@@ -210,6 +249,7 @@ function M.new(hooks,small,title,dependencies)
   end
   local function activate(ctx,index)
     local r=rows[index];if not r then return end
+    if r.action=='review'then r.origin=u.page end
     if r.action=='back'then back(ctx);return end
     if s.busy then return end
     status=s:status(ctx)
@@ -221,8 +261,14 @@ function M.new(hooks,small,title,dependencies)
     perform(ctx,r);continue_pending(ctx)
   end
   local function turn_page(delta)
+    if u.page=='review_text'and u.reader then u.reader:turn(delta);return end
     local target=geometry.page+delta
     if target>=1 and target<=geometry.pages then u.focus=(target-1)*geometry.per+1 end
+  end
+  function u:review_document(ctx,name)
+    self:open(ctx);local r={action='review',file=name and {name=name},origin='main'}
+    status=s:status(ctx)
+    if not status.connected or status.busy then self.pending=r;connect(ctx);prepare(ctx);continue_pending(ctx)else perform(ctx,r)end
   end
   function u:sync_document(ctx)self:open(ctx);activate(ctx,1);prepare(ctx)end
   function u:input(ctx,ev)
@@ -231,8 +277,8 @@ function M.new(hooks,small,title,dependencies)
       elseif ev.phase=='down'or ev.phase=='repeat'then
         local code=ev.code or ev.key
         if code=='Escape'then back(ctx)
-        elseif code=='ArrowUp'or code=='up'then self.focus=math.max(1,self.focus-1)
-        elseif code=='ArrowDown'or code=='down'then self.focus=math.min(#rows,self.focus+1)
+        elseif code=='ArrowUp'or code=='up'then if self.page=='review_text'then turn_page(-1)else self.focus=math.max(1,self.focus-1)end
+        elseif code=='ArrowDown'or code=='down'then if self.page=='review_text'then turn_page(1)else self.focus=math.min(#rows,self.focus+1)end
         elseif code=='ArrowLeft'or code=='left'then turn_page(-1)
         elseif code=='ArrowRight'or code=='right'then turn_page(1)
         elseif (code=='Enter'or code=='ok')and ev.phase=='down'then activate(ctx,self.focus)end
@@ -265,10 +311,13 @@ function M.new(hooks,small,title,dependencies)
   function u:draw(ctx,g)
     local l=geometry;g:clear(0)
     g:text(l.x,l.y,'GitHub sync',{font=title,color=15})
-    if l.pages>1 then g:text(l.x+l.w,l.y,l.page..' / '..l.pages,{font=small,color=15,align='right'})end
+    if u.page=='review_text'then g:text(l.x+l.w,l.y,'Page '..l.page,{font=small,color=15,align='right'})
+    elseif l.pages>1 then g:text(l.x+l.w,l.y,l.page..' / '..l.pages,{font=small,color=15,align='right'})end
     local y=l.y+title.line_height+8
     for i,line in ipairs(header)do
-      g:text_box(l.x,y,l.w,l.line*(i==3 and l.notice_lines or i==2 and l.status_lines or 1),line,{font=small,color=15,wrap='word',overflow='ellipsis'})
+      if i~=3 or l.notice_lines>0 then
+        g:text_box(l.x,y,l.w,l.line*(i==3 and l.notice_lines or i==2 and l.status_lines or 1),line,{font=small,color=15,wrap='word',overflow='ellipsis'})
+      end
       y=y+l.line*(i==2 and l.status_lines or 1)
     end
     if l.qr then
@@ -278,6 +327,9 @@ function M.new(hooks,small,title,dependencies)
         g:rect(q.x+r[1]*q.scale,q.y+r[2]*q.scale,r[3]*q.scale,q.scale,{color=15,fill=true})
       end
     end
+    if u.page=='review_text'and u.reader then for i,r in ipairs(u.reader.lines)do
+      g:text(l.x,l.top+(i-1)*(small.line_height+4),r.text,{font=small,color=15})
+    end end
     for i=l.first,math.min(#rows,l.first+l.per-1)do
       local ry=l.top+(i-l.first)*l.row
       if i==self.focus or rows[i].primary then g:rect(l.x,ry,l.w,l.row-2,{color=15,line_width=rows[i].primary and 2 or 1})end

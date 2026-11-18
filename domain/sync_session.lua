@@ -63,14 +63,14 @@ function M.new(hooks,dependencies)
     else notify(ctx,'Remember enabled. Connect once to save the connection.')end
   end
   function s:forget(ctx)
-    serial=serial+1;self.busy=false;self.conflict=nil;self.pending_update=nil;self.rows={};self.history=nil
+    serial=serial+1;self.busy=false;self.conflict=nil;self.pending_update=nil;self.review=nil;self.rows={};self.history=nil
     local ok=ready(ctx)and auth:forget(ctx)
     if ok then ctx.state.github_sync_remember=false end
     wifi(ctx,0);notify(ctx,ok and 'Connection forgotten. Sign in again to connect.'or 'Could not remove saved connection. Retry Forget before using sync.')
   end
   function s:disconnect(ctx)
     reconnect_allowed=false
-    serial=serial+1;self.busy=false;self.conflict=nil;self.pending_update=nil;self.rows={};self.history=nil
+    serial=serial+1;self.busy=false;self.conflict=nil;self.pending_update=nil;self.review=nil;self.rows={};self.history=nil
     if auth then auth:disconnect()end;wifi(ctx,0);notify(ctx,'Disconnected. Session cleared.')
   end
   function s:connect(ctx)
@@ -113,6 +113,7 @@ function M.new(hooks,dependencies)
   local function checkpoint(ctx,metadata,revision,name,record)
     local next_value=Store.checkpoint(metadata,name,record,config.scope)
     local ok=next_value and Store.save(ctx,next_value,config.scope,p.hash,revision)
+    if ok and s.needs_review==name then s.needs_review=nil end
     if ok and s.on_checkpoint then s.on_checkpoint(ctx,name,record.last_synced_local_fingerprint)end
     return ok
   end
@@ -174,7 +175,7 @@ function M.new(hooks,dependencies)
           s.remote_change={name=name,identity=snapshot.identity,fingerprint=Sync.digest(p.hash,snapshot.bytes)}
           s.file_status='Remote changes found'
         end
-        s.busy=false;s.conflict={name=name,sha=remote.sha,reason=plan.reason}
+        s.busy=false;s.needs_review=name;s.conflict={name=name,sha=remote.sha,reason=plan.reason}
         notify(c,'Conflict: originals kept. Choose a copy or cancel.');return
       end
       if plan.action=='mark_synced'then complete(c,{ok=true,sha=remote.sha});return end
@@ -219,6 +220,77 @@ function M.new(hooks,dependencies)
       s.file_status=saved and 'Up to date at last sync'or 'Saved locally'
       notify(c,'Local document updated. Backup: '..backup..(saved and ''or ' (sync record not saved)'))
     end,pending.sha)
+    if not ok then failed(ctx,id,e)end
+  end
+  local function review_same(c,file)
+    local current=hooks.snapshot(c,false,file.name)
+    return current and current.name==file.name and current.identity==file.identity
+      and current.revision==file.revision and current.bytes==file.bytes and current.saved and current.exists
+  end
+  function s:review_document(ctx,name)
+    if ctx.budget then ctx.budget:extend()end
+    local file=hooks.snapshot(ctx,true,name)
+    if not file then notify(ctx,'Save the local document successfully before review.');return end
+    local id=begin(ctx);if not id then return end
+    self.review=nil;self.conflict=nil;self.pending_update=nil
+    local ok,e=auth:read(ctx,file.name,function(c,remote,why)
+      if id~=serial then return end
+      if not remote or not review_same(c,file)then failed(c,id,why or 'local_changed');return end
+      s.busy=false;s.review={name=file.name,file=file,remote=remote}
+      notify(c,'Read both versions, then choose which one to keep.')
+    end)
+    if not ok then failed(ctx,id,e)end
+  end
+  function s:resolve_review(ctx,direction)
+    local review=self.review
+    if not review or (direction~='local'and direction~='github')then return end
+    if direction=='local'and (not review.remote.exists or type(hooks.apply_remote)~='function')then return end
+    if ctx.budget then ctx.budget:extend()end
+    if not review_same(ctx,review.file)then self.review=nil;notify(ctx,'Local file changed. Review both versions again.');return end
+    local id=begin(ctx);if not id then return end
+    local metadata,revision=Store.load(ctx,config.scope,p.hash)
+    if not metadata then failed(ctx,id,'metadata');return end
+    local function complete(c,sha,bytes,backup,local_update,identical)
+      if id~=serial then return end
+      local current=hooks.snapshot(c,false,review.name)
+      if not current or current.bytes~=bytes then failed(c,id,'local_changed');return end
+      local fp=Sync.digest(p.hash,bytes)
+      local saved=fp and checkpoint(c,metadata,revision,review.name,{remote_path='documents/'..review.name,
+        remote_blob_sha=sha,last_synced_local_fingerprint=fp})
+      s.busy=false;s.review=nil;s.conflict=nil;s.pending_update=nil;s.remote_change=nil
+      s.file_status=saved and 'Up to date at last sync'or 'Saved locally'
+      if local_update and s.on_checkpoint then s.on_checkpoint(c,review.name,nil)end
+      if (local_update or saved)and s.needs_review==review.name then s.needs_review=nil end
+      notify(c,(identical and 'Both versions already match.'or (local_update and 'Local version replaced.'or 'GitHub version replaced.'))
+        ..(backup and ' Backup: '..backup or '')..(saved and ''or ' Sync record not saved; recheck.'))
+    end
+    local ok,e=auth:read(ctx,review.name,function(c,remote,why)
+      if id~=serial then return end
+      if not remote then failed(c,id,why);return end
+      if not review_same(c,review.file)then s.review=nil;failed(c,id,'local_changed');return end
+      if remote.exists~=review.remote.exists or remote.sha~=review.remote.sha or remote.bytes~=review.remote.bytes then
+        s.review=nil;failed(c,id,'remote_changed');return
+      end
+      if remote.exists and remote.bytes==review.file.bytes then complete(c,remote.sha,remote.bytes,nil,false,true);return end
+      if direction=='local'then
+        local applied,backup=hooks.apply_remote(c,review.file,remote.bytes)
+        if not applied then failed(c,id,'local_update_failed');return end
+        complete(c,remote.sha,remote.bytes,backup,true)
+      else
+        local backup
+        if remote.exists then
+          local target=Docs.fresh_name(c,'github-before',review.name:lower():sub(-4)=='.txt'and '.txt'or '.md',hooks.reserved_name())
+          backup=target and Docs.import_copy(c,target,remote.bytes,hooks.reserved_name())
+          if not backup then failed(c,id,'backup_failed');return end
+        end
+        local sent,error=auth:write(c,review.name,review.file.bytes,remote.exists and remote.sha or nil,function(c2,receipt,err)
+          if id~=serial then return end
+          if not receipt then failed(c2,id,err);return end
+          complete(c2,receipt.sha,review.file.bytes,backup,false)
+        end,function(c2)return review_same(c2,review.file)and (not backup or Docs.read(c2,backup)==remote.bytes)end)
+        if not sent then failed(c,id,error)end
+      end
+    end,review.remote.sha)
     if not ok then failed(ctx,id,e)end
   end
   -- Automatic uploads use only a captured successful-save fingerprint, never an editor buffer.
@@ -320,7 +392,7 @@ function M.new(hooks,dependencies)
   end
   function s:browse(ctx)
     local id=begin(ctx);if not id then return end
-    self.conflict=nil;self.pending_update=nil;self.rows={};self.history=nil
+    self.conflict=nil;self.pending_update=nil;self.review=nil;self.rows={};self.history=nil
     local ok,e=auth:list(ctx,function(c,rows,why)
       if id~=serial then return end
       if not rows then failed(c,id,why);return end
@@ -352,7 +424,7 @@ function M.new(hooks,dependencies)
   end
   function s:close(ctx)
     self:pause(ctx)
-    self.rows={};self.conflict=nil;self.pending_update=nil;self.history=nil;wifi(ctx,0)
+    self.rows={};self.conflict=nil;self.pending_update=nil;self.history=nil;self.review=nil;wifi(ctx,0)
   end
   function s:pause(ctx)
     if self.busy then
@@ -363,7 +435,7 @@ function M.new(hooks,dependencies)
     wifi(ctx,0)
   end
   function s:leave(ctx)
-    serial=serial+1;self.busy=false
+    serial=serial+1;self.busy=false;self.review=nil
     if auth then auth:disconnect()end;wifi(ctx,0)
   end
   return s
