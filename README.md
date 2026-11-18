@@ -4,7 +4,7 @@ For Studio imports use the corrected exporter described in
 [Studio project layout](docs/STUDIO-PROJECT-LAYOUT.md). Desktop tests and the
 separate diagnostic are stored there as text references, avoiding mixed app roots.
 
-Development build **1.0.18** adds optional manual GitHub sync under **Settings > More > GitHub sync**. Choose **Sync this document** or press **Ctrl+G**: inkWrite checks the saved document and GitHub, then uploads local changes or offers **Update local document** when only GitHub changed. Updating asks first and keeps a verified `before-sync-###` local backup. Conflicts keep both originals and offer copies. File status distinguishes local changes, the last successful sync and detected remote changes.
+Development build **1.0.19** adds optional manual GitHub sync under **Settings > More > GitHub sync**. Choose **Sync this document** or press **Ctrl+G**: inkWrite checks the saved document and GitHub, then uploads local changes or offers **Update local document** when only GitHub changed. Updating asks first and keeps a verified `before-sync-###` local backup. Conflicts keep both originals and offer copies. File status distinguishes local changes, the last successful sync and detected remote changes.
 
 Direct GitHub device sign-in remains in use, with a QR code for approval. First connection offers **Remember and connect** or **Connect for this session only**. Remember requires consent to store reusable credentials unencrypted on the SD card; anyone with the card can recover them. Saved credentials can renew without browser approval while GitHub permits it. **Forget saved connection** removes them. No hosted service is required. Local save, autosave and recovery work independently. See [simpler sync workflow and test steps](docs/GITHUB-SYNC-1.0.13.md).
 
@@ -15,6 +15,8 @@ Selecting Sync, Browse or Version history automatically tries to connect if need
 Optional **Automatic uploads** are available in GitHub sync and start **Off**. Enable them to queue successful saves, then return to writing. The app waits for a configurable 15/30/60-second delay (30 by default) and ten seconds without input before uploading. Typing interrupts transfers; conflicts require manual review. The bounded queue survives normal closing and supports controlled retries. It never downloads automatically or opens browser approval in the background. See [Phase 5 and device test steps](docs/GITHUB-SYNC-PHASE5.md).
 
 A **GitHub !** badge appears in the writing screen when a known conflict or held upload needs attention, including focus mode. Tap it (or press Ctrl+G while it is visible) to review the affected file. **Read local version** and **Read GitHub version** open read-only pages. You can then explicitly replace the local version or overwrite GitHub, with a verified local backup and a fresh revision check first. See [conflict review and replacement](docs/GITHUB-CONFLICT-REVIEW-1.0.18.md).
+
+Build 1.0.19 fixes touch feedback: single taps immediately show the new caret and double/triple taps immediately show word/sentence selection, without opening Settings or the virtual keyboard. Typing still uses the existing coalesced redraw path.
 
 See [Phase 3 implementation and test instructions](docs/GITHUB-SYNC-PHASE3.md), [API review](docs/XTAPP-API-REVIEW-2026-11-13.md), [App setup](docs/GITHUB-APP-SETUP.md) and [Studio project layout](docs/STUDIO-PROJECT-LAYOUT.md). The owner reported the standalone Phase 2 sign-in test working; document transfers still need device acceptance.
 

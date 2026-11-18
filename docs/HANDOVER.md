@@ -1,3 +1,9 @@
+## 1.0.19 - Immediate touch caret and selection feedback
+
+Owner reported caret/selection becoming visible only after opening Settings or the virtual keyboard. Reproduced with a failing regression: pointer handlers changed live buffer position/anchor and invalidated, but cancelled the redraw timer without preparing a new frame. frame_ready intentionally accepts the last coherent editor snapshot during typing, so redraw painted stale caret/selection indefinitely. Added publish_touch_frame: cancel pending typing redraw, prepare current endpoints/layout outside drawing, invalidate. Called only for successful text-tap caret movement and double/triple word/sentence selection. Typing batching and stale-hit guards unchanged.
+
+29/29 suites pass, 16,101 assertions. New touch suite has 48 checks across portrait/landscape and two font heights: actual next-draw caret/highlights, single/double/triple tap publication, highlight clearing and cancellation of an active typing coalescer. Test failed before patch and passes after. Existing typing/snapshot regressions pass. Native Pro isolated real-writer fixture (no net permission) showed new caret after one tap and selection highlight after double_tap immediately, without opening any other UI; zero runtime faults. Triple-tap temporal sequence is covered by desktop events; physical-device acceptance remains pending. Final cloud/source/icons/commit proof in delivery artifact.
+
 ## 1.0.18 - Writing-screen alert and explicit two-way conflict resolution
 
 Added measured/clickable GitHub ! badge in editor header and focus mode, preserving the local Saved label. It reflects known held uploads or a manual conflict; checks do not continuously poll GitHub. Ctrl+G follows the badge when attention exists. Badge cannot bypass close confirmation or language popup input ownership. Pending conflict rows and manual conflict menu can open review; main page also offers Review current document versions.

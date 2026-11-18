@@ -4,7 +4,7 @@ local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
 local SyncUI=require('domain.sync_ui')
-local M={VERSION="1.0.18"}
+local M={VERSION="1.0.19"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 -- Typing pacing. None of these shorten the panel's own frame time; they keep
@@ -158,6 +158,11 @@ end
 local function cancel_redraw()
   if A.redraw_timer then A.redraw_timer:cancel(); A.redraw_timer=nil end
   A.pending_frame_since=nil
+end
+-- Touch changes caret/selection without editing text. Publish those endpoints
+-- before invalidating; the last typing snapshot is intentionally reusable in draw.
+local function publish_touch_frame(ctx)
+  cancel_redraw();prepare_frame(ctx);ctx:invalidate()
 end
 local function request_editor_frame(ctx)
   -- The first key after idle is prepared and shown at once. Keys that arrive
@@ -1252,7 +1257,7 @@ function M.input(ctx,ev)
           if count==2 and not word then A.text_tap=nil;command(ctx,11);return true
           elseif word and (count==2 or count==3) and not A.blocked then
             local a,z=text_span(A.buffer,p,count==3)
-            A.anchor=a;A.buffer:seek(z);A.browsing=false;A.typing_time=nil;cancel_navigation();cancel_redraw();ctx:invalidate()
+            A.anchor=a;A.buffer:seek(z);A.browsing=false;A.typing_time=nil;cancel_navigation();publish_touch_frame(ctx)
             if count==3 then A.text_tap=nil end
             return true
           end
@@ -1384,7 +1389,7 @@ function M.input(ctx,ev)
         local row=A.touch_rows[i]
         local p=tapped>#A.touch_rows and row.z or Layout.nearest(row,A.touch_font,ev.x-l.x)
         if A.buffer:is_boundary(p) then
-          A.browsing=false;A.anchor=nil;A.buffer:seek(p);cancel_redraw();ctx:invalidate()
+          A.browsing=false;A.anchor=nil;A.buffer:seek(p);publish_touch_frame(ctx)
         end
       end
     end
