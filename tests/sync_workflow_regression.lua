@@ -164,4 +164,9 @@ h=reviewed();h.s:resolve_review(h.ctx,'github');h:respond({},401)
 check(not h.s.busy and not h.s:status(h.ctx).connected and h.files['github-before-001.md']==nil,'revoked authorization prevents backup/overwrite during resolution')
 h=setup();local calls=h.calls;h.s:review_document(h.ctx,'IDEAS.md')
 check(h.calls==calls and not h.s.review,'case-alias filename cannot bypass the active editor replacement guard')
+h=setup();h.a.sync.auto.items={{name='ideas.md',held=true,reason='conflict'}}
+local measure=h.a.ui_small.measure;local badge_measures=0
+h.a.ui_small.measure=function(self,text)if text=='GitHub !'then badge_measures=badge_measures+1 end;return measure(self,text)end
+App.input(h.ctx,{type='key',source='keyboard',phase='down',code='KeyA',text='a',mods={}})
+check(badge_measures==0,'typing never computes pointer-only badge geometry or measures its label')
 return n

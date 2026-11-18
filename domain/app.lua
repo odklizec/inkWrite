@@ -1145,7 +1145,8 @@ function M.input(ctx,ev)
   if ev.type=="pointer" and (type(ev.x)~="number" or type(ev.y)~="number" or ev.x~=ev.x or ev.y~=ev.y or ev.x<0 or ev.y<0 or ev.x>=ctx.screen.width or ev.y>=ctx.screen.height) then return true end
   -- Notices belong to the action that produced them. Dismiss on the next
   -- deliberate action, not on pointer movement or the trailing key release.
-  local badge=github_badge(ctx,geometry(ctx))
+  local badge
+  if ev.type=='pointer'and ev.phase=='up'then badge=github_badge(ctx,geometry(ctx))end
   if not A.close_modal and not A.languages and badge and ev.type=='pointer'and ev.phase=='up'and (ev.gesture=='tap'or ev.gesture=='double_tap')
     and ev.x>=badge.x and ev.x<badge.x+badge.w and ev.y>=badge.y and ev.y<badge.y+badge.h then
     cancel_navigation();A.sync:review_document(ctx,badge.name);return true
