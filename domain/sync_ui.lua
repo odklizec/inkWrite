@@ -1,10 +1,13 @@
 local Session=require('domain.sync_session')
 local Config=require('domain.sync_config')
+local Automatic=require('domain.sync_auto')
 local ApprovalQR=require('domain.approval_qr')
 local M={}
 function M.new(hooks,small,title,dependencies)
   local s=Session.new(hooks,dependencies)
-  local u={active=false,page='main',focus=1,session=s}
+  local auto=Automatic.new(s,hooks,dependencies)
+  s.on_checkpoint=function(ctx,name,fingerprint)auto:ack(ctx,name,fingerprint)end
+  local u={active=false,page='main',focus=1,session=s,auto=auto}
   local rows,header,geometry,key,status={},{},{},nil,{}
   local function prepare(ctx)
     status=s:status(ctx)
@@ -22,6 +25,13 @@ function M.new(hooks,small,title,dependencies)
         rows[#rows+1]={label='Retry saving connection',action='retry_remember'}
       end
       rows[#rows+1]={label='Version history: current document',action='current_history'}
+      rows[#rows+1]={label='Automatic uploads: '..(ctx.state.github_sync_auto==true and 'On'or 'Off'),action='auto_settings'}
+    elseif u.page=='auto'then
+      rows={{label=ctx.state.github_sync_auto==true and 'Turn automatic uploads Off'or 'Enable automatic uploads',action='auto_toggle'},
+        {label='Upload delay: '..((ctx.state.github_sync_delay==15 or ctx.state.github_sync_delay==60)and ctx.state.github_sync_delay or 30)..' seconds',action='auto_delay'},
+        {label='Retry pending uploads',action='auto_retry'},
+        {label='Clear upload queue',action='auto_clear'}}
+      for _,v in ipairs(auto.items)do rows[#rows+1]={label=(v.held and 'Review: 'or 'Pending: ')..v.name,action='auto_info',file=v}end
     elseif u.page=='remote'then
       rows[#rows+1]={label='Refresh remote folder',action='browse'}
       for _,r in ipairs(s.rows)do rows[#rows+1]={label=r.name,action='select',file=r}end
@@ -78,6 +88,11 @@ function M.new(hooks,small,title,dependencies)
         bad_refresh_token='Saved authorization expired or revoked. Connect again.',authorization_required='Saved access rejected. Connect to renew it.',access_forbidden='GitHub refused access. Retry; saved login kept.',refresh_failed='Renewal failed. Retry Connect; saved login kept.',clock_unavailable='Set device time, then retry Connect.'}
       header[3]=errors[status.reason]or 'Connection failed. Retry Connect; check App setup.'
     end
+    if u.page=='auto'then
+      header[1]='Automatic uploads: '..#auto.items..' pending'
+      header[2]=auto.notice
+      header[3]='Uploads documents you save after enabling. Remote changes require review. No automatic downloads.'
+    end
     if u.page=='confirm'then header[3]='Download: '..u.selected.name end
     if u.page=='history'then
       header[1]='History: '..(u.history_name or '')
@@ -91,7 +106,7 @@ function M.new(hooks,small,title,dependencies)
     local o=ctx.screen.occlusion or {};local x,y=(o.left or 0)+16,(o.top or 0)+12
     local w=ctx.screen.width-(o.right or 0)-x-16
     local bottom=ctx.screen.height-(o.bottom or 0)-18
-    local notice_lines=(u.page=='remember'or u.page=='connect')and (w>=640 and 3 or 4)or 2
+    local notice_lines=(u.page=='remember'or u.page=='connect'or u.page=='auto')and (w>=640 and 3 or 4)or 2
     local line=small.line_height+4;local top=y+title.line_height+8+line*(1+status_lines+notice_lines)
     local rh=math.max(44,small.line_height+12)
     local qr
@@ -109,10 +124,10 @@ function M.new(hooks,small,title,dependencies)
     u.focus=math.max(1,math.min(#rows,u.focus))
     local page=((u.focus-1)//per)+1;local pages=math.max(1,(#rows+per-1)//per)
     geometry={x=x,y=y,w=w,bottom=bottom,page=page,pages=pages,touch_left=o.left or 0,touch_right=ctx.screen.width-(o.right or 0),touch_bottom=ctx.screen.height-(o.bottom or 0),footer_y=footer_y,footer_left=(o.left or 0)+20,footer_right=ctx.screen.width-(o.right or 0)-20,top=top,row=rh,per=per,first=((u.focus-1)//per)*per+1,line=line,notice_lines=notice_lines,status_lines=status_lines,qr=qr}
-    local next_key=table.concat({u.page,u.focus,status.state,status.user_code or '',tostring(status.busy),status.reason or '',status.remember_error or '',tostring(s.busy),s.file_status,tostring(ctx.state.github_sync_enabled),tostring(ctx.state.github_sync_remember),s.notice,#rows,s.history and s.history.page or 0,s.history and s.history.anchor or '',w,bottom},'|')
+    local next_key=table.concat({u.page,u.focus,status.state,status.user_code or '',tostring(status.busy),status.reason or '',status.remember_error or '',tostring(s.busy),s.file_status,tostring(ctx.state.github_sync_enabled),tostring(ctx.state.github_sync_remember),s.notice,auto.notice,tostring(ctx.state.github_sync_auto),tostring(ctx.state.github_sync_delay),#auto.items,#rows,s.history and s.history.page or 0,s.history and s.history.anchor or '',w,bottom},'|')
     if key~=next_key then key=next_key;ctx:invalidate()end
   end
-  function u:open(ctx)self.active=true;self.page='main';self.focus=1;key=nil;s:open(ctx);prepare(ctx)end
+  function u:open(ctx)auto:interrupt(ctx);auto:load(ctx);self.active=true;self.page='main';self.focus=1;key=nil;s:open(ctx);prepare(ctx)end
   local function back(ctx)
     if u.pending then u.pending=nil;s:disconnect(ctx)end
     if s.busy then s:disconnect(ctx)end
@@ -134,6 +149,19 @@ function M.new(hooks,small,title,dependencies)
     if r.action=='cancel_auth'then u.pending=nil;s:disconnect(ctx);u.focus=1
     elseif r.action=='sync'then
       s:sync(ctx)
+    elseif r.action=='auto_settings'then auto:load(ctx);u.page='auto';u.focus=1
+    elseif r.action=='auto_toggle'then
+      auto:interrupt(ctx);ctx.state.github_sync_auto=ctx.state.github_sync_auto~=true
+      if ctx.state.github_sync_auto then ctx.state.github_sync_enabled=true;auto:load(ctx);auto:resume(ctx)else auto.notice='Off; pending queue kept'end
+    elseif r.action=='auto_delay'then
+      local value=ctx.state.github_sync_delay or 30;ctx.state.github_sync_delay=value==15 and 30 or (value==30 and 60 or 15)
+    elseif r.action=='auto_retry'then auto:retry(ctx)
+    elseif r.action=='auto_clear'then auto:clear(ctx)
+    elseif r.action=='auto_info'then
+      local messages={conflict='GitHub differs. Use manual Sync.',saved_file_changed='File changed. Save it again.',
+        connection_required='Connect, then retry pending uploads.',authorization_required='Reconnect, then retry pending uploads.',
+        rate_limited='GitHub rate limit. Waiting one hour.',metadata_invalid='Sync record needs attention. Use manual Sync.'}
+      auto.notice=r.file.name..': '..(messages[r.file.reason]or (r.file.held and 'Use manual Sync or retry.'or 'Waiting for idle or retry delay.'))
     elseif r.action=='toggle'then s:toggle(ctx)
     elseif r.action=='connect'then
       if status.connected or status.busy or status.user_code then u.pending=nil;s:disconnect(ctx)else connect(ctx)end
@@ -227,12 +255,13 @@ function M.new(hooks,small,title,dependencies)
     return true
   end
   function u:tick(ctx)
+    auto:flush(ctx)
     if status.state=='authorizing'then s:poll(ctx)end
     continue_pending(ctx);prepare(ctx)
   end
-  function u:pause(ctx)s:pause(ctx);key=nil;if self.active then prepare(ctx)end end
-  function u:resume(ctx)if self.active then key=nil;s:open(ctx);prepare(ctx)end end
-  function u:leave(ctx)self.pending=nil;s:leave(ctx)end
+  function u:pause(ctx)auto:pause(ctx);s:pause(ctx);key=nil;if self.active then prepare(ctx)end end
+  function u:resume(ctx)auto:resume(ctx);if self.active then key=nil;s:open(ctx);prepare(ctx)end end
+  function u:leave(ctx)auto:pause(ctx,true);self.pending=nil;s:leave(ctx)end
   function u:draw(ctx,g)
     local l=geometry;g:clear(0)
     g:text(l.x,l.y,'GitHub sync',{font=title,color=15})

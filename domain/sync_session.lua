@@ -1,4 +1,4 @@
--- Manual synchronization only. No timers, drawing, credentials or editor mutations.
+-- Scoped transfers. Scheduling is separate; drawing and local saving never send requests.
 local Sync=require('domain.sync')
 local Store=require('domain.sync_metadata')
 local Docs=require('domain.documents')
@@ -112,7 +112,9 @@ function M.new(hooks,dependencies)
   end
   local function checkpoint(ctx,metadata,revision,name,record)
     local next_value=Store.checkpoint(metadata,name,record,config.scope)
-    return next_value and Store.save(ctx,next_value,config.scope,p.hash,revision)
+    local ok=next_value and Store.save(ctx,next_value,config.scope,p.hash,revision)
+    if ok and s.on_checkpoint then s.on_checkpoint(ctx,name,record.last_synced_local_fingerprint)end
+    return ok
   end
   function s:sync(ctx)return self:upload(ctx,false,true)end
   function s:upload(ctx,as_new,combined)
@@ -210,6 +212,7 @@ function M.new(hooks,dependencies)
       local current=hooks.snapshot(c,false)
       if not current or current.name~=file.name or current.bytes~=remote.bytes then failed(c,id,'unverified_update');return end
       s.busy=false;s.remote_change=nil
+      if s.on_checkpoint then s.on_checkpoint(c,file.name,nil)end
       local fp=Sync.digest(p.hash,remote.bytes)
       local saved=fp and checkpoint(c,metadata,revision,file.name,{remote_path='documents/'..file.name,
         remote_blob_sha=remote.sha,last_synced_local_fingerprint=fp})
@@ -217,6 +220,64 @@ function M.new(hooks,dependencies)
       notify(c,'Local document updated. Backup: '..backup..(saved and ''or ' (sync record not saved)'))
     end,pending.sha)
     if not ok then failed(ctx,id,e)end
+  end
+  -- Automatic uploads use only a captured successful-save fingerprint, never an editor buffer.
+  function s:restore_auto(ctx)
+    if not reconnect_allowed or not ready(ctx)then return nil,'connection_required'end
+    local st=auth:status(ctx)
+    if st.connected then return true end
+    if st.busy then return true end
+    local ok,e=auth:restore(ctx);self.auto_active=ok==true;return ok,e -- Never initiates device approval.
+  end
+  function s:cancel_auto(ctx)
+    if not self.auto_active then return end
+    serial=serial+1;self.busy=false;self.auto_active=false
+    if auth then auth:cancel_operation()end
+    wifi(ctx,0)
+  end
+  function s:auto_upload(ctx,item,guard,done)
+    if self.busy or not ready(ctx)then return nil,'busy'end
+    if not auth:status(ctx).connected then return nil,'connection_required'end
+    if ctx.budget then ctx.budget:extend()end
+    local bytes=Docs.read(ctx,item.name)
+    if not bytes or Sync.digest(p.hash,bytes)~=item.fingerprint then return nil,'saved_file_changed'end
+    if not guard(ctx)then return nil,'interrupted'end
+    local metadata,revision=Store.load(ctx,config.scope,p.hash)
+    if not metadata then return nil,'metadata_invalid'end
+    serial=serial+1;local id=serial;self.busy=true;self.auto_active=true;wifi(ctx,30000)
+    local function same(c)
+      return guard(c)and Docs.read(c,item.name)==bytes
+    end
+    local function finish(c,result,why)
+      if id~=serial then return end
+      s.busy=false;s.auto_active=false;wifi(c,0)
+      done(c,result,why)
+    end
+    local function checkpoint_auto(c,sha)
+      if not same(c)then finish(c,nil,'saved_file_changed');return end
+      local ok=checkpoint(c,metadata,revision,item.name,{remote_path='documents/'..item.name,
+        remote_blob_sha=sha,last_synced_local_fingerprint=item.fingerprint})
+      finish(c,ok and true or nil,ok and nil or 'checkpoint_failed')
+    end
+    local ok,e=auth:read(ctx,item.name,function(c,remote,why)
+      if id~=serial then return end
+      if not remote then finish(c,nil,why);return end
+      if not same(c)then finish(c,nil,'saved_file_changed');return end
+      local file={name=item.name,bytes=bytes,saved=true,exists=true,revision=0,identity=item}
+      local plan=Sync.decide('upload',file,remote,metadata.documents[item.name],p.hash)
+      if not plan then finish(c,nil,'invalid_plan');return end
+      if plan.action=='conflict'then finish(c,nil,'conflict');return end
+      if plan.action=='mark_synced'then checkpoint_auto(c,remote.sha);return end
+      if plan.action~='create'and plan.action~='update'then finish(c,nil,'invalid_plan');return end
+      local sent,err=auth:write(c,item.name,bytes,remote.exists and remote.sha or nil,function(c2,receipt,error)
+        if id~=serial then return end
+        if not receipt then finish(c2,nil,error);return end
+        checkpoint_auto(c2,receipt.sha)
+      end,same)
+      if not sent then finish(c,nil,err)end
+    end)
+    if not ok then finish(ctx,nil,e)end
+    return true
   end
   function s:history_page(ctx,name,page,anchor)
     local id=begin(ctx);if not id then return end

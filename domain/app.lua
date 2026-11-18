@@ -4,7 +4,7 @@ local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
 local SyncUI=require('domain.sync_ui')
-local M={VERSION="1.0.16"}
+local M={VERSION="1.0.17"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 -- Typing pacing. None of these shorten the panel's own frame time; they keep
@@ -336,6 +336,7 @@ local function save(ctx)
   if A.blocked then message(ctx,"Recovery needs attention; existing files are protected"); return false end
   if not A.doc or not A.buffer then return false end
   if not A.dirty and A.doc.base~=nil then
+    if A.sync then A.sync.auto:saved(ctx,A.doc.name,A.buffer:text())end
     ctx.state.last=A.doc.name;ctx.state.cursor=A.buffer.pos
     A.message=nil;ctx:invalidate(); return true
   end
@@ -352,6 +353,7 @@ local function save(ctx)
     message(ctx,tostring(ok and err or result)); return false
   end
   A.dirty=false; A.save_failed=false; A.status="Saved on SD card"
+  if A.sync then A.sync.auto:saved(ctx,A.doc.name,A.buffer:text())end
   ctx.state.last=A.doc.name; ctx.state.cursor=A.buffer.pos
   A.message=nil;ctx:invalidate()
   return true
@@ -664,7 +666,7 @@ function M.load(ctx)
   A.sync=SyncUI.new({
     reserved_name=function()return A.doc and A.doc.name end,
     can_import=function()return not A.blocked end,
-    describe=function()return {name=A.doc and A.doc.name,dirty=A.dirty}end,
+    describe=function()return {name=A.doc and A.doc.name,dirty=A.dirty,blocked=A.blocked or A.save_failed}end,
     apply_remote=function(c,captured,text)
       extend_budget(c)
       if A.blocked or A.dirty or A.doc~=captured.identity or A.buffer.revision~=captured.revision
@@ -693,6 +695,7 @@ function M.load(ctx)
       if bytes~=A.doc.base or Docs.read(c,A.doc.name)~=bytes then return nil end
       return {identity=A.doc,name=A.doc.name,revision=A.buffer.revision,bytes=bytes,saved=true,exists=true}
     end},A.ui_small,A.ui_medium)
+  A.sync.auto:load(ctx)
   A.font_name="";A.font_px=A.large and 30 or 24
   A.spacing=(ctx.state.spacing==4 or ctx.state.spacing==14) and ctx.state.spacing or 8
   A.margin=(ctx.state.margin==40 or ctx.state.margin==56) and ctx.state.margin or 24
@@ -1103,6 +1106,7 @@ local function virtual_press(ctx,label)
   ctx:invalidate()
 end
 function M.input(ctx,ev)
+  if A.sync then A.sync.auto:interrupt(ctx)end
   if A.sync and A.sync.active then return A.sync:input(ctx,ev)end
   if A.file_job or A.file_dialog then return true end
   if ev.type=="pointer" and (type(ev.x)~="number" or type(ev.y)~="number" or ev.x~=ev.x or ev.y~=ev.y or ev.x<0 or ev.y<0 or ev.x>=ctx.screen.width or ev.y>=ctx.screen.height) then return true end
@@ -1366,6 +1370,7 @@ function M.tick(ctx)
     local forced=A.first_dirty and age(t,A.first_dirty)>=SAVE_FORCE_MS
     if (quiet and age(t,A.last_edit)>=5000) or forced then save(ctx) end
   end
+  if A.sync and not A.file_job and not A.virtual and not A.languages then A.sync.auto:tick(ctx)end
 end
 -- A successful snapshot already protects this exact document revision.
 -- Retain only its identity, never another full copy of the document text.

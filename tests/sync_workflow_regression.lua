@@ -93,4 +93,21 @@ local write=h.ctx.storage.write
 h.ctx.storage.write=function(self,name,t)if name==Store.FILE then return nil,'io_error'end;local old=h.private.fail_write;h.private.fail_write=false;local a,b=write(self,name,t);h.private.fail_write=old;return a,b end
 h:read(NEW,F.NEW)
 check(h.files['ideas.md']==NEW and h.files['before-sync-001.md']==OLD and h.s.notice:find('record not saved',1,true),'metadata failure does not undo verified local update or lose backup')
+-- Actual editor Save enqueues only after success; typing cancels without SD/network work.
+h=setup();h.ctx.state.github_sync_auto=true;h.a.sync.auto:load(h.ctx)
+App.input(h.ctx,{type='key',source='keyboard',phase='down',code='KeyA',text='a',mods={}})
+local calls=h.calls
+App.input(h.ctx,{type='key',source='keyboard',phase='down',code='KeyS',mods={ctrl=true}})
+check(not h.a.dirty and #h.a.sync.auto.items==1 and h.calls==calls,'Ctrl+S saves locally and queues without a synchronous network request')
+h.time=h.time+30000;App.tick(h.ctx)
+check(h.s.busy,'foreground idle tick starts queued saved document')
+local writes=h.public_writes
+App.input(h.ctx,{type='key',source='keyboard',phase='down',code='KeyB',text='b',mods={}})
+check(h.a.dirty and not h.s.busy and h.public_writes==writes and h.calls==calls+1,'typing interrupts automatic transfer without file IO or another request')
+h.s:sync(h.ctx);h:read(OLD,F.OLD);h:verify(h.s);h:respond(F.written('documents/ideas.md'),201)
+check(#h.a.sync.auto.items==0,'successful manual Sync removes the exact matching automatic queue entry')
+h=setup();h.ctx.state.github_sync_auto=true;h.a.sync.auto:load(h.ctx)
+h.fail_main=true;App.input(h.ctx,{type='key',source='keyboard',phase='down',code='KeyA',text='a',mods={}})
+App.input(h.ctx,{type='key',source='keyboard',phase='down',code='KeyS',mods={ctrl=true}})
+check(h.a.save_failed and #h.a.sync.auto.items==0,'failed public Save never enters automatic queue')
 return n
