@@ -5,7 +5,11 @@ local Docs=require('domain.documents')
 local M={}
 local function slot_ok(slot)return slot==1 or slot==2 end
 function M.new()
-  return {sessions={},active=1,direction='horizontal',ratio='1:1',split=false}
+  return {sessions={},active=1,direction='horizontal',direction_auto=true,ratio='1:1',split=false}
+end
+function M.effective_direction(w,screen)
+  if w.direction_auto then return screen.width>screen.height and 'vertical'or 'horizontal'end
+  return w.direction
 end
 function M.find(w,name)
   if type(name)~='string' then return nil end
@@ -50,7 +54,7 @@ function M.auto_blocked(w)
 end
 function M.remember(ctx,w)
   if not w.slotted then return end
-  local value={schema=1,active=w.active,split=w.split,direction=w.direction,ratio=w.ratio,sessions={}}
+  local value={schema=1,active=w.active,split=w.split,direction=w.direction,direction_auto=w.direction_auto,ratio=w.ratio,sessions={}}
   for i=1,2 do local s=w.sessions[i]
     if s then value.sessions[i]={name=s.doc.name,cursor=s.buffer.pos,top=s.top}end
   end
@@ -62,6 +66,7 @@ local function settings(ctx)
   if v==nil then return false end
   if type(v)~='table'or v.schema~=1 or not slot_ok(v.active)or type(v.split)~='boolean'
     or (v.direction~='horizontal'and v.direction~='vertical')
+    or (v.direction_auto~=nil and type(v.direction_auto)~='boolean')
     or (v.ratio~='1:1'and v.ratio~='2:1'and v.ratio~='1:2')or type(v.sessions)~='table'then return nil,'Workspace settings protected'end
   local names={};local count=0
   for k,r in pairs(v.sessions)do
@@ -87,7 +92,11 @@ function M.restore(ctx,time)
     recs[1]=migrated
   end
   local w=M.new();w.slotted=true
-  if v then w.active=v.active;w.split=v.split;w.direction=v.direction;w.ratio=v.ratio end
+  if v then
+    w.active=v.active;w.split=v.split;w.direction=v.direction;w.ratio=v.ratio
+    -- Earlier builds stored only a direction. Keep that choice fixed.
+    w.direction_auto=v.direction_auto==true
+  end
   local names={}
   for i=1,2 do names[i]=recs[i]and recs[i].name or v and v.sessions[i]and v.sessions[i].name end
   if names[1]and names[2]and names[1]:lower()==names[2]:lower()then return nil,'Duplicate pane recovery protected'end

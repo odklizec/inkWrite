@@ -109,7 +109,7 @@ local function geometry(ctx,editor,slot)
   end
   if A.view=='editor'and A.workspace.split then
     l.workspace_notice={x=l.x,y=l.foot,w=l.w}
-    local layout=Panes.split({x=l.x,y=l.body,w=l.w,h=math.max(0,l.text_bottom-l.body)},A.workspace.direction,A.workspace.ratio)
+    local layout=Panes.split({x=l.x,y=l.body,w=l.w,h=math.max(0,l.text_bottom-l.body)},Workspace.effective_direction(A.workspace,ctx.screen),A.workspace.ratio)
     local pane=slot==1 and layout.a or layout.b
     local area=Panes.text_area(pane,math.max(44,A.ui_small.line_height+8),A.margin,font(ctx).line_height,A.spacing)
     l.panes=layout;l.pane=pane;l.pane_header=area.header
@@ -588,6 +588,12 @@ local function toggle_orientation(ctx)
   if not ok then message(ctx,"Screen rotation failed: "..tostring(err));return end
   ctx.state.screen_orientation=target
   A.editor.touch_geometry=nil;A.editor.layout_revision=nil;A.languages=nil;A.panel=nil;A.action_focus=nil
+  -- Rotation is applied after this callback; prepare against the new size
+  -- from a timer scheduled here rather than waiting for a drawing callback.
+  if A.prepare_timer then A.prepare_timer:cancel()end
+  A.prepare_timer=ctx:after(1,function(c)
+    A.prepare_timer=nil;prepare_frame(c);c:invalidate()
+  end)
 end
 local commands={"Back to writing","Save to SD card","New Markdown page","Open SD files","Typography","Where are my files?","Keyboard help","Memory & timing","Save and exit","Orientation: follow device","Focus: Ctrl+Shift+F","Today's journal: Ctrl+J","New plain text page","Keyboard layout"}
 -- Ask only for sizes. API 2.17+ selects the user's Ink App font.
@@ -607,9 +613,10 @@ end
 local function list_rows()
   if A.view=='split'then
     local w=A.workspace
-    return {'Back to writing','Horizontal: top / bottom'..(w.split and w.direction=='horizontal'and ' *'or ''),'Vertical: left / right'..(w.split and w.direction=='vertical'and ' *'or ''),
+    return {'Back to writing','Horizontal: top / bottom'..(w.split and not w.direction_auto and w.direction=='horizontal'and ' *'or ''),'Vertical: left / right'..(w.split and not w.direction_auto and w.direction=='vertical'and ' *'or ''),
       'Ratio 1:1'..(w.ratio=='1:1'and ' *'or ''),'Ratio 2:1'..(w.ratio=='2:1'and ' *'or ''),
-      'Ratio 1:2'..(w.ratio=='1:2'and ' *'or ''),'Switch active pane','Single pane',A.focus_mode and 'Exit focus mode'or 'Enter focus mode'}
+      'Ratio 1:2'..(w.ratio=='1:2'and ' *'or ''),'Switch active pane','Single pane',A.focus_mode and 'Exit focus mode'or 'Enter focus mode',
+      'Auto: follow screen'..(w.direction_auto and ' *'or '')}
   end
   if A.view=="menu" then return {commands[6],commands[7],commands[8],"Statistics","GitHub sync","Split screen"} end
   if A.view=="layouts" then
@@ -750,12 +757,13 @@ split_action=function(ctx,i)
   if i==9 then command(ctx,11);return end
   if A.blocked then message(ctx,'Recovery needs attention; split settings are protected');return end
   local w=A.workspace
-  if i>=2 and i<=6 then
+  if i>=2 and i<=6 or i==10 then
     extend_budget(ctx)
     local ok,e=Workspace.enable(ctx,w,now(ctx))
     if not ok then message(ctx,'Split screen: '..tostring(e));return end
     A.editor=w.sessions[w.active]
-    if i==2 or i==3 then w.direction=i==2 and 'horizontal'or 'vertical'
+    if i==10 then w.direction_auto=true
+    elseif i==2 or i==3 then w.direction=i==2 and 'horizontal'or 'vertical';w.direction_auto=false
     else w.ratio=({'1:1','2:1','1:2'})[i-3]end
   elseif i==7 then
     if not w.slotted or not switch_pane(ctx,w.active%2+1)then return end

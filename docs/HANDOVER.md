@@ -1,3 +1,27 @@
+## Automatic split direction - 2026-11-19
+
+New workspaces default to Auto: follow screen: portrait -> top/bottom,
+landscape -> left/right. Selecting either fixed direction disables Auto and
+persists the choice through rotations/reopenings. A new Auto row at the end of
+Split settings releases the override. Ratio cycling and single-pane mode keep
+the chosen policy. Existing saved directions without the new boolean flag stay
+fixed; malformed flags are protected. Effective direction derives from current
+screen size, including asynchronous rotation, without mutating either session.
+Rotation queues preparation from input for the next host size, outside drawing.
+
+35/35 desktop suites pass, 19,755 assertions; 124 new checks cover Auto/fixed,
+both modes/shapes, delayed rotation, persistence/legacy/invalid settings,
+recovery failure, document/selection/undo retention and frame preparation.
+The test host no longer swaps dimensions on a redundant orientation request.
+Native revision 1e04fff913a8b5a934d42722151a70a19fda994efeced185ca489b0183d3ad58:
+Pro showed Auto in both screen shapes, fixed top/bottom after a full rotation
+round trip, then Auto restored. Classic/Pro restart and Classic Left/Right
+passed without faults. The preview required an additional input to complete a
+rotated prepared frame; idle timer delivery and immediate redraw still need a
+physical-device check. No runtime errors. Studio's refresh-full-input warning
+after four rotations is consistent with the host's required orientation full
+refresh. No original cloud save, main merge, version bump or Store release.
+
 ## Split shortcut update - 2026-11-19
 
 Ctrl+Shift+S now cycles single -> 1:1 -> 2:1 -> 1:2 -> single using the

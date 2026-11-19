@@ -25,7 +25,12 @@ function M.new(options)
     read=function(_,k,a,z)outside();local v=h.files[k];return v and v:sub(a+1,a+z)or nil,v and nil or 'not_found'end,
     write=function(_,k,v)outside();if h.fail_public==true or h.fail_public==k then return nil,'io_error'end;h.files[k]=v;h.public_writes=h.public_writes+1;return true end,
     list=function()outside();local rows={};for k,v in pairs(h.files)do rows[#rows+1]={name=k,size=#v}end;table.sort(rows,function(a,b)return a.name<b.name end);return rows end}
-  c.screen.set_orientation=function(_,direction)outside();c.screen.width,c.screen.height=c.screen.height,c.screen.width;c.screen.orientation=direction;return true end
+  c.screen.orientation=c.screen.width>c.screen.height and 'landscape'or 'portrait'
+  c.screen.set_orientation=function(_,direction)
+    outside()
+    if (direction=='landscape')~=(c.screen.width>c.screen.height)then c.screen.width,c.screen.height=c.screen.height,c.screen.width end
+    c.screen.orientation=direction;return true
+  end
   c.quit=function()h.quit=true;App.leave(c)end
   function h:state()for i=1,50 do local k,v=debug.getupvalue(App.draw,i);if k=='A'then return v end end end
   function h:key(code,text,mods)App.input(c,{type='key',source='keyboard',phase='down',code=code,text=text,mods=mods or {}})end

@@ -23,6 +23,10 @@ superseded. Baseline: 30 suites / 16,177 assertions pass locally.
 
 - Horizontal means A above B; vertical means A left of B. Ratios 1:1, 2:1 and
   1:2 always describe A:B and never reverse when activation changes.
+  New workspaces use Auto: follow screen: portrait top/bottom, landscape
+  left/right. Choosing a fixed direction overrides Auto through later rotations
+  and reopenings. The Auto menu row restores following the screen. Existing
+  saved directions from earlier builds remain fixed choices.
 - Normal and focus modes show both documents at the selected ratio. Focus hides
   normal chrome, retaining compact filename/dirty/error indicators and an active
   badge. Screen rotation preserves session identities and positions.
@@ -158,9 +162,10 @@ overwrite or Store publication is included. Before physical acceptance, use
 copies of documents: older single-pane builds do not load the new recovery
 slots. Native preview and hardware evidence are separate from desktop tests.
 
-Validation: 34/34 desktop suites pass, 19,631 assertions. Session foundation:
+Validation: 35/35 desktop suites pass, 19,755 assertions. Session foundation:
 59 checks; geometry: 3,084 checks across 96 configurations; real writer split
-integration: 194 checks; shortcut cycle: 99 checks; App/GitHub workflow: 62 checks
+integration: 194 checks; shortcut cycle: 99 checks; rotation/Auto: 124 checks;
+App/GitHub workflow: 62 checks
 including inactive-pane
 identity/revision guards, protected A recovery and blocked automatic uploads.
 Static packaging verifies all 25 runtime Lua modules, their require closure,
@@ -189,3 +194,24 @@ revision `e55e40805752b370200513dcbcfe78d1d72debeeb3fdfe0be39c2524e9db21f7`,
 with empty diagnostics. Classic device controls were handled without faults.
 Raw Bluetooth shortcut delivery remains a physical-device check; simulator
 input tools do not expose those chords.
+
+Automatic direction follow-up: `direction_auto` is a validated optional boolean
+in workspace schema 1. New workspaces default to true; older saved workspaces
+without it retain their fixed direction. Geometry derives the effective
+orientation from the current screen dimensions without changing document state
+or doing layout during drawing. Ratio changes do not turn Auto off. Rotation
+schedules frame preparation outside drawing after the host publishes its size.
+35 suites pass with 124 new rotation/Auto assertions, including asynchronous
+rotation, both launch shapes/modes, fixed overrides, restore, invalid settings,
+recovery failures and both sessions' text/selection/undo. The shared test host
+now correctly avoids swapping dimensions for an already-applied orientation.
+
+Native source revision `1e04fff913a8b5a934d42722151a70a19fda994efeced185ca489b0183d3ad58`
+showed Auto top/bottom in portrait and left/right in landscape, and a fixed
+top/bottom choice after a rotation round trip. Auto was restored before Classic
+and Pro restart checks; Classic Left/Right were handled without faults. The
+native preview required another input to finish the rotated prepared frame;
+idle timer delivery/immediate redraw after rotation remains a hardware check.
+There were no runtime errors. Studio raised a refresh-full-input warning after
+four screen rotations; the contract schedules full refresh for orientation
+changes. No new explicit full-refresh request is added here.
