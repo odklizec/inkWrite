@@ -1,6 +1,6 @@
 local n=0
 local function check(x,s)n=n+1;assert(x,s)end
-package.loaded['domain.stats']={new=function()return setmetatable({},{__index=function()return function()end end})end}
+package.loaded['domain.stats']={new=function()return setmetatable({saved=0},{__index=function()return function()end end})end}
 local function host(public,private)
  local c={state={last='missing.md',cursor=999},time=0,screen={width=480,height=800,occlusion={left=0,right=0,top=0,bottom=0}},clock={},input={listen=function()return true end},budget={extend=function()end},writes=0}
  local f={line_height=24,measure=function(_,s)return (utf8.len(s)or 0)*12 end};c.fonts={medium=f,large=f,small=f}

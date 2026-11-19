@@ -1,6 +1,32 @@
 # inkWrite
 
-A quiet writing and journaling app for Xteink X4Pro and X4Classic. Current development build: **0.1.47**. Requires compatible Gancao firmware with XTApp API 2.18 support.
+For Studio imports use the corrected exporter described in
+[Studio project layout](docs/STUDIO-PROJECT-LAYOUT.md). Desktop tests and the
+separate diagnostic are stored there as text references, avoiding mixed app roots.
+
+Development build **1.0.20** adds optional manual GitHub sync under **Settings > More > GitHub sync**. Choose **Sync this document** or press **Ctrl+G**: inkWrite checks the saved document and GitHub, then uploads local changes or offers **Update local document** when only GitHub changed. Updating asks first and keeps a verified `before-sync-###` local backup. Conflicts keep both originals and offer copies. File status distinguishes local changes, the last successful sync and detected remote changes.
+
+Direct GitHub device sign-in remains in use, with a QR code for approval. First connection offers **Remember and connect** or **Connect for this session only**. Remember requires consent to store reusable credentials unencrypted on the SD card; anyone with the card can recover them. Saved credentials can renew without browser approval while GitHub permits it. **Forget saved connection** removes them. No hosted service is required. Local save, autosave and recovery work independently. See [simpler sync workflow and test steps](docs/GITHUB-SYNC-1.0.13.md).
+
+Selecting Sync, Browse or Version history automatically tries to connect if needed, then continues the requested action once. First-use consent and browser approval remain available when needed. Back or Cancel stops the pending action. A manual Connect alone never transfers a document. Sync pages use one universal footer Back, the normal app font, centred Prev and right-aligned Next. Paging changes the visible rows immediately; controls appear only when another page exists, with a page count at the top. The footer accepts edge taps and rapid repeat taps.
+
+**Version history** now lists recent GitHub commits for the current document or a file selected through Browse remote documents. Choose **Older versions** / **Newer versions**, select an entry, then **Restore as new local copy**. The original document stays open; use Open to inspect the new `restore-###` file. See [Phase 4 history and restore](docs/GITHUB-SYNC-PHASE4.md).
+
+Optional **Automatic uploads** are available in GitHub sync and start **Off**. Enable them to queue successful saves, then return to writing. The app waits for a configurable 15/30/60-second delay (30 by default) and ten seconds without input before uploading. Typing interrupts transfers; conflicts require manual review. The bounded queue survives normal closing and supports controlled retries. It never downloads automatically or opens browser approval in the background. See [Phase 5 and device test steps](docs/GITHUB-SYNC-PHASE5.md).
+
+A **GitHub !** badge appears in the writing screen when a known conflict or held upload needs attention, including focus mode. Tap it (or press Ctrl+G while it is visible) to review the affected file. **Read local version** and **Read GitHub version** open read-only pages. You can then explicitly replace the local version or overwrite GitHub, with a verified local backup and a fresh revision check first. See [conflict review and replacement](docs/GITHUB-CONFLICT-REVIEW-1.0.18.md).
+
+Build 1.0.19 fixes touch feedback: single taps immediately show the new caret and double/triple taps immediately show word/sentence selection, without opening Settings or the virtual keyboard. Typing still uses the existing coalesced redraw path.
+
+See [Phase 3 implementation and test instructions](docs/GITHUB-SYNC-PHASE3.md), [API review](docs/XTAPP-API-REVIEW-2026-11-13.md), [App setup](docs/GITHUB-APP-SETUP.md) and [Studio project layout](docs/STUDIO-PROJECT-LAYOUT.md). The owner reported the standalone Phase 2 sign-in test working; document transfers still need device acceptance.
+
+A quiet writing and journaling app for Xteink X4Pro and X4Classic. Requires compatible Gancao firmware with XTApp API 2.26 support.
+
+## GitHub setup
+
+Open **Settings > More > GitHub sync > GitHub setup / change repository**. New installs open setup automatically. Enter your own GitHub App's public Client ID, numeric App ID and GitHub login, approve the device code (or scan its QR), then choose a private repository and branch. Save the verified destination. No secrets or source edits are needed. Existing owner setup is retained.
+
+Each saved destination keeps separate sync records, pending uploads and remembered credentials. Switching leaves automatic uploads Off and asks for Remember consent again. Four additional setups plus the existing owner setup can be retained. [Setup instructions and device checks](docs/GITHUB-GENERAL-SETUP-1.0.20.md).
 
 ## Start writing
 
@@ -38,7 +64,7 @@ Choose your font in **Ink App → Settings → Font**, then close and reopen ink
 
 Documents are ordinary UTF-8 `.md` or `.txt` files in **`/AppFiles/inkwrite/`**. Open File includes rename and delete controls. Delete asks for confirmation. Renaming copies and verifies the file before removing the source; interruption can leave both files or a partial new copy. Keep the app open during rename.
 
-Ctrl+S or Save writes to SD. Autosave runs after approximately five idle seconds or thirty dirty seconds. A failed autosave pauses retries until another edit or explicit save. A Saved label means the public write succeeded.
+Ctrl+S or Save writes to SD. Autosave runs after about five idle seconds without a keypress; while you keep typing it waits for a short gap, and a public save is forced after two dirty minutes at the latest. A failed autosave pauses retries until another edit or explicit save. A Saved label means the public write succeeded.
 
 If a loaded file changed externally, saving creates a conflict copy instead of silently replacing it. Differing recovery text reopens as a recovered copy. Check and save recovered text. Protected/recovery errors block unsafe changes.
 
@@ -48,13 +74,14 @@ Back from the normal editor or its header X opens the close dialog. Unsaved chan
 
 Save, power down the device, remove its SD card and copy `.md`/`.txt` files from `AppFiles/inkwrite/` using a card reader. Open them in a normal editor without conversion. Public documents survive app upgrades and uninstall; private recovery/preferences do not survive uninstall. Keep external file edits separate from editing in inkWrite.
 
-Wireless export is optional future work and is not required for manual retrieval.
+Optional manual GitHub transfers are available through Settings → More → GitHub sync. SD retrieval remains available offline.
 
 ## Keyboard shortcuts
 
 | Shortcut | Action |
 | --- | --- |
 | Ctrl+S | Save |
+| Ctrl+G | Sync this document / review GitHub attention |
 | Ctrl+N | New dated Markdown document |
 | Ctrl+O | Open file |
 | Ctrl+J | Today's journal |
@@ -62,7 +89,11 @@ Wireless export is optional future work and is not required for manual retrieval
 | Ctrl+A | Select all |
 | Shift+movement | Extend selection |
 | Ctrl+C / X / V | App-local copy / cut / paste |
-| Ctrl+B / Ctrl+I | Bold / italic Markdown markers |
+| Ctrl+B / Ctrl+I | Bold / italic markers (.md) |
+| Ctrl+1 to Ctrl+6 | Heading 1-6; Ctrl+0 removes it (.md) |
+| Ctrl+L | Bullet list line (.md) |
+| Ctrl+Quote | Quote line (.md) |
+| Ctrl+K | Link marker (.md) |
 | Home / End | Current visual line start / end |
 | Ctrl+Home / Ctrl+End | Document start / end |
 | Ctrl+Left / Right | Move by word |
@@ -84,7 +115,7 @@ The owner has confirmed working Bluetooth typing and the latest fast multi-tap g
 
 Open Settings → More → Statistics. Week and Month show daily typing-time bars; Year shows monthly bars. Switch periods on the same page using the tabs or arrow keys. Totals include words added, active typing time and foreground app time. Average/day divides typing time by elapsed calendar days in the current period, including days with no writing.
 
-Typing time includes editing and a 30-second idle grace after input; time while paused/asleep is excluded. Words added count positive document-word increases from insertion, including paste; deletions do not subtract and undo/formatting do not add words. Existing documents are not backfilled. Invalid device dates pause recording. History retains up to 400 recorded days, stored privately without document text. Checkpoints are written about once a minute and on pause/exit; sudden power loss may lose the latest uncheckpointed statistics. Uninstall removes private statistics.
+Typing time includes editing and a 30-second idle grace after input; time while paused/asleep is excluded. Words added count positive document-word increases from insertion, including paste; deletions do not subtract and undo/formatting do not add words. Existing documents are not backfilled. Invalid device dates pause recording. History retains up to 400 recorded days, stored privately without document text. Checkpoints are written about once a minute once typing pauses, never during a keystroke; a long unbroken session still checkpoints at least every three minutes, and pause/exit always writes. Sudden power loss may lose the latest uncheckpointed statistics. Uninstall removes private statistics.
 
 ## 0.1.33 national virtual character row
 
@@ -113,7 +144,7 @@ Swipe right starting within 32 pixels of the left screen edge to open the paged 
 
 
 
-The first typing frame after idle is prepared immediately. Further keystrokes share a 30 ms grouping window; an unchanged window requests no extra refresh. More → Memory & timing shows session maximum app input, queue, layout, drawing and save durations. Input-to-draw ends when the app has drawn the frame; it excludes Bluetooth transmission and the screen refresh. These numbers are diagnostic measurements, not a promise of screen response speed.
+The first typing frame after idle is prepared immediately. Further keystrokes share a 30 ms grouping window; an unchanged window requests no extra refresh. A wider window was measured on the device and made typing slower, because a frame requested during a refresh is merged into the next one anyway. More → Memory & timing opens its own page and shows six session counters, each as last / average / worst in milliseconds: input callback, layout, draw, key to prepare, key to drawn and save to SD. Key to drawn ends when the app has drawn the frame, so it includes the screen refresh (roughly 650 ms per frame) but not Bluetooth transmission. Key to prepare is the app-side number worth watching; key to drawn is dominated by the panel. These are diagnostic measurements, not a promise of screen response speed.
 
 
 

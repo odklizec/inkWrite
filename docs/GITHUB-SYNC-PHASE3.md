@@ -1,0 +1,29 @@
+> Build 1.0.7 historical behavior below. Build 1.0.8 adds opt-in remembered connections and automatic refresh, and preserves pending codes across system covers. See [the correction](GITHUB-CONNECTION-1.0.8.md) for current behavior.
+
+# Phase 3 — manual upload and download
+
+Build 1.0.7, development project inkWrite GitHub Sync Phase 0. The owner's existing App/public identifiers and selected private repo odklizec/inkwrite-docs, branch main, remain configured. No secret is stored in source, state, private files or public files. The owner reported Phase 2 device sign-in working; this does not prove document transfers.
+
+## Behavior
+
+Settings > More > GitHub sync starts disabled. Enable, Connect, enter the displayed code at github.com/login/device, approve, then keep the app open while account/App/repository/branch checks complete. Upload current saved document first completes local saving, checks exact saved bytes, reads the remote version and decides create/update/equal/conflict. A second local identity/revision/byte check runs immediately before PUT after authorization preflight, and again before checkpointing. Updates require the remote blob SHA. Equal content updates the checkpoint without a commit. The only automatic polling is device-code authorization while the panel is open; no upload retries or save-triggered syncing.
+
+Browse reads nonrecursive root and documents trees, requiring untruncated responses. Limits: 128 entries per tree, 64 supported documents, 48 KiB response, 32 KiB UTF-8 documents without NUL, safe basenames ending .md/.txt. Symlinks/submodules/directories/unsupported/oversized files are not offered. Selecting a row opens Cancel / Download as local copy. The selected SHA must still match. The original basename is used only when absent and not reserved by the active editor; otherwise download-### with the correct extension is allocated. A verified import does not open the file or touch recovery, cursor, selection or document buffer. Use Open afterward to inspect it.
+
+Conflicts default to Cancel. Other choices upload local under a fresh UUID remote basename or download remote as a new local copy. Neither choice replaces the conflict's originals. Copies whose names differ from the remote basename do not acquire a misleading original-file checkpoint. A failed metadata write after transfer is reported separately; retry reads the remote again. Uncertain HTTP completion never acknowledges a commit. Pause/exit clears auth and cancels operations; late callbacks cannot write/checkpoint. Closing the panel cancels an in-progress operation, retains only an idle RAM session and releases automatic Wi-Fi grace.
+
+## Validation
+
+Desktop tests include real Lua orchestration/auth/transport with synthetic HTTP and SD/private storage: create, equal/no duplicate commit, local update, remote conflict, exact Unicode/CRLF import, collision/reserved-name handling, SHA drift, SD failure, protected recovery, source change during PUT preflight, metadata failure after remote success, adoption on retry, corrupt metadata, stale callback, upload-as-new, nonrecursive listing, symlinks, duplicates/truncation/sparse trees. Integrated UI tests cover touch/Classic/keyboard, portrait/landscape and tall fonts, no I/O/font work in draw, explicit opt-in, state preservation, suspend and default Cancel. Existing regression suites remain included. Final desktop result: 18/18 suites, 14,660 assertions, zero failures. Native Studio preview: separate synthetic app_id inkwrite.phase3fixture; Pro touch and Classic button routes reach the real sync panel with fault null and Problems diagnostics empty. Both were captured at 480x800. No live document transfer or authorization was performed during this preview. One launcher icon-open warning appeared in runtime logs; the supplied two binary icons are retained and compared separately. Native landscape and transfer failures remain NOT TESTED; portrait/landscape/tall-font coverage here is desktop simulation.
+
+NOT TESTED on physical hardware in this phase: actual commit/upload/download acceptance, 32 KiB memory/performance, revocation, two devices racing, Wi-Fi loss mid-PUT, suspend/power loss and SD failures. Synthetic failure coverage is not hardware proof. The host has no exclusive-create primitive: external writes in the narrow absence-check/write window remain a limitation.
+
+## Owner acceptance test
+
+1. Use a disposable page with accented text and multiple lines, e.g. Pôvodný čaj / Žluťoučký kůň. Save locally. Open Settings > More > GitHub sync, enable and connect.
+2. Upload. Check main/documents/<filename> in the private docs repository and its new commit. Upload unchanged again: there should be no second commit. Edit locally, save, upload: one update commit.
+3. Edit that same remote file using GitHub. Upload locally: expect Conflict with Cancel selected. Cancel and verify both originals. Repeat and try Download remote as local copy. Open the reported new local filename and check accents/line breaks. The current document must remain unchanged until you explicitly open another.
+4. Browse a different small remote .md/.txt file, download as local copy, then download it again: the existing file must stay intact and the second import get a new name. Try upload local as NEW remote file on a conflict; verify a separate remote basename.
+5. Disconnect Wi-Fi and keep writing/saving locally. A failed sync must not prevent local saving. Suspend/reopen: reconnect is required. Report the status text and file names if anything fails; never send tokens or private contents.
+
+History/restore belongs to Phase 4; optional auto-sync requires separate approval.

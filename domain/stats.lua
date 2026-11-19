@@ -39,9 +39,12 @@ function S:flush(ctx)
   local ok,result=pcall(function() return ctx.storage:write(FILE,self.history..self:line()) end)
   self.save_error=not ok or not result
   if not self.save_error then self.dirty=false end
+  -- One attempt per interval: a failed write is retried a minute later, not on
+  -- every tick.
+  self.due=false
   self.saved=ctx.clock:millis()
 end
-function S:tick(ctx)
+function S:tick(ctx,allow_flush)
   local now=ctx.clock:millis();local day=date(ctx)
   local delta=self.last and ((now-self.last)&0x7fffffff) or 0;self.last=now
   if self.error or not day or (self.day and day<self.day) then self.active=nil;return end
@@ -61,14 +64,17 @@ function S:tick(ctx)
     end
     self.dirty=true
   end
-  if ((now-self.saved)&0x7fffffff)>=60000 then self:flush(ctx) end
+  -- Never write the file from a keystroke: an edit only marks the checkpoint
+  -- as due. The idle tick or pause/exit performs the write.
+  if self.dirty and ((now-self.saved)&0x7fffffff)>=60000 then self.due=true end
+  if self.due and allow_flush then self:flush(ctx) end
 end
 function S:edit(ctx,words)
   self:tick(ctx)
   local day=date(ctx);if self.error or day~=self.day then return end
   self.active=ctx.clock:millis();self.word=math.min(9999999,self.word+math.max(0,words));self.dirty=true
 end
-function S:pause(ctx) self:tick(ctx);self:flush(ctx);self.last=nil;self.active=nil end
+function S:pause(ctx) self:tick(ctx,true);self:flush(ctx);self.last=nil;self.active=nil end
 function S:resume(ctx) self.last=ctx.clock:millis();self.active=nil end
 function S:report(ctx,mode)
   local day,c=date(ctx);if not day then return nil,"Set the device date to record statistics" end

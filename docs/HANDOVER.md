@@ -1,3 +1,188 @@
+## Cloud verification and main integration - 2026-11-19
+
+Owner saved the development project to cloud and explicitly requested merging phase0/github-sync-audit into main. Opened the successful cloud workspace save (development project e6d7a10b-8bdc-4f4c-bf77-1f5dfa1e5395, saved November 19 at 19:14 Europe/Bratislava) through project manager, after exporting the local state. Exported 92 project files and two assets from that cloud-loaded copy. Cloud manifest is 1.0.21 due to Studio's automatic increment. All 22 executable Lua modules and both exact XIC icons match development HEAD; the runtime About/menu constant remains 1.0.20, exactly as saved in cloud. GitHub manifest now matches cloud 1.0.21. Do not change runtime code solely to copy it or create another cloud version. Two development documents differed only because outage notes were updated on GitHub after the old Studio import; those historical notes are retained below and superseded by this entry. Original released Studio project is unchanged; no Store publication is requested.
+
+Re-ran all 30 suites successfully: 16,177 assertions. PR #1 has no submitted reviews or review threads. Native preview and physical-device/second-account acceptance are not claimed by this verification. Cloud/main source and asset hash proof, merge commit and full source are recorded in the delivery artifacts.
+
+## 1.0.20 - General direct GitHub setup
+
+Added public setup fields, separate RAM-only device sign-in, verified personal account/App installation, paged private writable repository/branch pickers, and explicit destination confirmation. Candidate session is handed to the live Session after Save; Remember is opt-in and never writes the candidate over the old grant. Existing owner setup/metadata/queue/credentials migrate in place; legacy strict checks remain until reconfigured. Four additional bounded profiles isolate grants, metadata and pending queues. Switching flushes the old queue, cancels old work, commits/read-verifies a checksummed public manifest, then rebuilds runtime with auto uploads Off. Revision mismatch after interrupted state save disables sync/Remember/auto until deliberate reconnect. Failed/ambiguous setup commit fails closed. No hosted service, source edits, secrets, org setup or destructive reset is introduced.
+
+30/30 suites pass, 16,177 assertions, including 56 new setup assertions and full UI -> Auth -> Session -> Remember handoff. Synthetic test coverage includes account/permission errors, stale/forged choices, final verification failure preserving old grant, slot bounds, persistence, profile isolation, ambiguous SD commits and interrupted activation. GitHub branch is updated. Studio loaded the 1.0.20 backup, but native preview and cloud-save verification are blocked by Studio HTTP timeouts; cloud must not be reported saved. The local backup and verification artifact preserve the release. Physical-device/second-account acceptance is still needed. See GITHUB-GENERAL-SETUP-1.0.20.md for entry point, scope and checks.
+
+## 1.0.19 - Immediate touch caret and selection feedback
+
+Owner reported caret/selection becoming visible only after opening Settings or the virtual keyboard. Reproduced with a failing regression: pointer handlers changed live buffer position/anchor and invalidated, but cancelled the redraw timer without preparing a new frame. frame_ready intentionally accepts the last coherent editor snapshot during typing, so redraw painted stale caret/selection indefinitely. Added publish_touch_frame: cancel pending typing redraw, prepare current endpoints/layout outside drawing, invalidate. Called only for successful text-tap caret movement and double/triple word/sentence selection. Typing batching and stale-hit guards unchanged.
+
+29/29 suites pass, 16,101 assertions. New touch suite has 48 checks across portrait/landscape and two font heights: actual next-draw caret/highlights, single/double/triple tap publication, highlight clearing and cancellation of an active typing coalescer. Test failed before patch and passes after. Existing typing/snapshot regressions pass. Native Pro isolated real-writer fixture (no net permission) showed new caret after one tap and selection highlight after double_tap immediately, without opening any other UI; zero runtime faults. Triple-tap temporal sequence is covered by desktop events; physical-device acceptance remains pending. Final cloud/source/icons/commit proof in delivery artifact.
+
+## 1.0.18 - Writing-screen alert and explicit two-way conflict resolution
+
+Added measured/clickable GitHub ! badge in editor header and focus mode, preserving the local Saved label. It reflects known held uploads or a manual conflict; checks do not continuously poll GitHub. Ctrl+G follows the badge when attention exists. Badge cannot bypass close confirmation or language popup input ownership. Pending conflict rows and manual conflict menu can open review; main page also offers Review current document versions.
+
+Review safely saves local edits, captures exact local bytes/identity/revision and GitHub blob SHA/content, then provides two read-only measured source viewers. New sync_review.lua wraps using the existing Layout adapter, retaining one page of lines plus byte offsets bounded by the 32 KiB source length. Layout is prepared outside drawing; no network/files/font acquisition in draw. Confirmation starts on Cancel. GitHub-to-local replacement keeps a verified before-sync-### backup and uses existing protected recovery/editor replacement. Local-to-GitHub overwrite first verifies a github-before-### copy on SD, rechecks both sources, and sends the reviewed blob SHA as GitHub's write precondition. Revocation, changed/deleted remote, changed local, case aliases, backup/recovery/metadata failures or write races refuse unsafe operations. Matching versions checkpoint without PUT. Queue and alert clear after verified resolution; unresolved errors remain reviewable. Other queued filenames can be reviewed/replaced without switching the active editor; current unsaved text is saved first and unrelated recovery remains protected.
+
+Full desktop regression plus final sync checks cover 28 suites / 16,053 assertions. Reader suite 112 checks covers full UTF-8/CRLF/whitespace coverage, paging, rotation, Cancel and no layout during draw. Actual App workflow suite now has 52 assertions, including both resolutions, preserved backups/checkpoints, last-moment disk edits, remote SHA drift/deletion, revoked authorization, SD/recovery failure, equality deduplication, named files, badge/focus/modal ownership and filename aliases. Native Pro used an isolated no-net-permission app with a synthetic GitHub adapter and real writer/SD hooks: badge -> GitHub read-only viewer -> default-Cancel confirmation -> local replacement. Original 96-byte draft was independently read from before-sync-001.md; writer showed GitHub text and cleared badge. No real GitHub overwrite or physical-device acceptance performed. Final source/icons/cloud identity/Git commit are recorded in delivery verification. See GITHUB-CONFLICT-REVIEW-1.0.18.md.
+
+## 1.0.17 - Phase 5 opt-in automatic upload after Save
+
+Owner asked to continue after the remaining-work discussion; implemented optional foreground sync after successful saves, Off by default. New sync_auto.lua retains at most 16 names + SHA-256 saved fingerprints in a scoped/checksummed <=16 KiB private queue. No document text or tokens. Local Save only marks/coalesces the queue; it never sends a network request. Idle ticks checkpoint the queue and run one transfer after a 15/30/60s delay and >=10s input quiet. Only an existing RAM session or remembered grant is used; no automatic device approval. No automatic download/local replacement. Every transfer revalidates scope, saved disk bytes, metadata and remote SHA. Current document dirty/protected blocks sending. Typing/pause/exit cancels in-flight work. Request retries re-fetch remote to deduplicate unknown write outcomes; at most three attempts per queued saved version, 30s then 120s backoff; rate limits wait one hour. Conflict holds survive subsequent saves until manual review/retry. Attempts/held records survive restart; timestamps are rebased. Manual checkpoint removes the matching queued fingerprint; confirmed remote-local update cancels obsolete queued local bytes. Off retains existing queue; Clear removes queue metadata only.
+
+UI has enable/disable, delay, pending-file review, retry and clear. No transfers while the GitHub overlay is open; return to the writer. Queue checkpoints run outside typing and on pause/exit. Abrupt power loss before the checkpoint can lose a pending marker; local text remains saved and re-saving requeues it. No close-time network request, lock-screen worker, merge, remote delete or library sweep.
+
+Desktop 27/27 suites, 15,913 assertions. New scheduler/session suite 44 checks: create/equal/unknown PUT outcome, conflicts, repeated saves, typing cancellation, pause/reload, corrupt/scope-changed/concurrent queue, SD/private write failures, max long UTF-8 names, three-attempt restart cap, rate limits, saved access/refresh restore and no browser fallback. Full App integration confirms Ctrl+S queue/no synchronous request, idle start, typing cancellation without file IO, failed Save exclusion and manual resolution. Existing typing regressions pass. Isolated native Pro settings preview has no network permission, no diagnostics/runtime fault; enable, delay and footer Back touches handled. No real credentials/private docs used. Real Wi-Fi/device timing/power-loss and Classic/Pro acceptance remain NOT TESTED. Final saved identity/source/icons/branch hash are in the delivery artifact. See GITHUB-SYNC-PHASE5.md.
+
+## 1.0.16 - Real paging and reliable footer taps
+
+Owner reported ineffective Prev/Next and intermittent Back. Footer previously moved focus even on a single page, ignored double_tap, and excluded side/bottom margins. Paging now selects the first row of the adjacent real page; unavailable Prev/Next are hidden and multi-page lists show a page count. Touch and keyboard use one page-turn helper. Footer hit area spans the entire unoccluded width and extends to the physical bottom; tap and double_tap both work there. List rows still accept single taps only, preventing accidental repeated destructive actions. No network/sync behavior change.
+
+Desktop 26/26 suites, 15,860 assertions. New pager suite has 44 checks for immediate visible page changes, exact previous-page return, unavailable controls, keyboard parity, rapid taps, edges and ignored swipes across portrait/landscape and two font heights. Native Pro synthetic 30-file browser changed 1/3 to 2/3 on one tap at (470,795), Prev returned, and Back at (4,795) returned to the main page, all without runtime faults. Final cloud/source/icon and Git verification are in the delivery artifact. Physical-device acceptance remains pending.
+
+## 1.0.15 - Consistent sync navigation and connect-on-action
+
+Removed redundant Back rows from every nested sync list/information page; confirmation Cancel rows remain explicit. Universal footer uses the same 24 px preferred UI font, divider, Back position and baseline as the app pager; Prev is centred and Next anchors to the right chrome edge. Shared geometry drives hit testing. QR spacing still fits portrait/landscape including larger fallback fonts.
+
+Network actions now check the current session, reuse an in-progress restore/approval or start one connection attempt, and continue the explicitly requested action once connected. First-use Remember/session-only consent remains required. One bounded pending action in RAM; Back/Cancel/Disconnect/Forget/exit clear it. Failure clears the action with no automatic retry loop. Manual Connect alone never performs a transfer. Existing verified save/revision/conflict/restore checks run when the operation continues. Removed the idle expired-session reconnect loop; a deliberate action can reconnect again.
+
+Desktop 25/25 suites, 15,816 assertions, including new automatic-connection/cancellation/footer regressions. Synthetic native Pro touch opened History from disconnected state without a Connect click, showing no top Back and corrected footer. Native Classic restart then Down/OK/Back handled without runtime fault. The simulator needs restart_xtapp_preview when changing device mode; run alone may retain the prior input mode. No real account/documents used. Physical-device acceptance pending. Cloud/source/icon and Git commit proof is in the final verification artifact.
+
+## 1.0.14 - Phase 4 document history and restore
+
+Added per-document history from the current document and remote browser. Five commits per page, at most 20 pages / 100 versions. First page anchors to the branch SHA returned by the existing scope check; later pages keep that immutable anchor. Every history/read operation revalidates account/App/private repo/branch. Historical Contents reads use the selected full commit SHA, not a blob SHA or mutable branch. Restores allocate verified restore-### copies, preserve active document/recovery/current sync metadata, and never rewrite GitHub. Cancel selected initially. Failures retain prior history page, show fixed/redacted status and require manual retry. One page retained only, clear on close/disconnect. No auto-sync.
+
+Desktop 24/24 suites, 15,793 assertions. New history suite has 48 checks, including paging stability/limits, malformed payloads, account mismatch, 32 KiB accented CRLF, exact-copy import, unchanged recovery/checkpoint, SD failures, stale callbacks, cancellation and actual UI/auth integration. Synthetic native Pro touch selected and restored a fixture; preview file API verified its exact 31 bytes. Direction input moves focus; simulator OK reports unsupported, so Classic OK acceptance remains desktop-only. Native history preview has zero Problems diagnostics and no runtime fault. Full writer startup and Settings touch also passed in a separate clean native preview identity. Physical hardware and real GitHub history matching remain NOT TESTED. Public network contract rechecked on 16 November 2026; API stays 2.26. Final delivery artifact records cloud identity/source/icon hashes and branch commit. See GITHUB-SYNC-PHASE4.md.
+
+## 1.0.13 - Simpler direct GitHub document sync
+
+Implemented the recommendations in the owner's chat "Compare Draftling and inkWrite": prominent Sync this document, Ctrl+G, cached file status, and confirmed remote-only update of the active document with a verified local backup. Owner chose direct device sign-in without hosting; first connection combines Remember/session-only choice with sign-in. Existing QR and single footer Back retained. No automatic transfer after sign-in or on startup. Desktop: 23/23 suites, 15,737 assertions in the final code checks. Synthetic native Pro main/connect/QR screens and Classic update confirmation were visually checked with zero runtime fault; Pro touch opens sign-in. Classic OK is unavailable in this simulator; desktop input tests cover Cancel selection and navigation. New integration cases exercise real App/Docs/auth/session/metadata modules with synthetic HTTP/SD, including dirty edits, remote revision drift, recovery conflicts, failed backup/recovery/public writes, checkpoint failure and cancellation. See GITHUB-SYNC-1.0.13.md. Delivery verification records final counts, cloud identity, source/assets and Git commit. Hardware acceptance remains pending.
+
+## 1.0.10 — One Back control on GitHub sync main page
+
+Owner confirmed QR works and requested removal of the duplicate top Back row. Main sync list now begins with GitHub sync: On/Off; bottom Back and physical/keyboard Back/Escape remain available. Nested Back/Cancel rows are preserved for remote browsing and confirmations. Existing input tests adjusted for shifted main-page rows; no sync/auth behavior change.
+
+## 1.0.9 — Reconnect without discarding refresh, approval QR
+
+Owner clarified the 1–2 day reapproval was in the sign-in diagnostic, not the writer; no writer failure is established. Found a concrete recovery weakness: a rejected saved access token discarded the refresh grant. Restore now tries exactly one device-flow refresh on API 401, without replaying a document write. Generic 401/403 and unknown refresh/configuration failures no longer delete saved credentials; explicit expired/bad refresh grants and identity/scope mismatches still fail closed. New synthetic fresh-VM tests cover 1, 2, 3 and 100 days. Added offline static QR under the approval message; it encodes only https://github.com/login/device, not secrets/codes or a third-party QR service. Cancel removes it. Static data is 37 modules including quiet zone, 214 merged black runs. Actual Lua QR draw commands independently decoded in four desktop geometry/font cases. 21/21 suites, 15,647 assertions. API updated to newest verified public contract 2.26. Studio sign-in restored. Synthetic native Pro QR screen has no runtime fault/Problems diagnostics; screenshot independently decoded to GitHub device approval URL; Cancel touch handled. Physical reentry remains NOT TESTED. Cloud-save verification is in the delivery artifact. Prepared from last verified 1.0.8 source. See GITHUB-CONNECTION-1.0.9.md.
+
+## 1.0.8 — Remember connection and visible sign-in code
+
+Owner rejected browser authorization after every app restart and reported missing code on return. Added explicit consented app-private credential persistence, lazy saved-session restoration when opening sync, automatic device-flow refresh without a client secret, verified Forget and clear persistence errors. System-cover pause now preserves sign-in code/RAM session; true exit clears RAM but retains an opted-in saved grant. Code has a dedicated visible line, with requesting/failure/expiry states. New credential module and standalone diagnostic builder dependency included. Desktop 19/19 suites, 14,755 assertions. No real credential was read or created in verification. See GITHUB-CONNECTION-1.0.8.md. The prior RAM-only ADR decision is superseded by this explicit opt-in; no relay, permanent token or GitHub security-setting change is needed.
+
+## 1.0.7 — Phase 3 manual GitHub sync
+
+Owner reported Phase 2 standalone device sign-in/private-repo authorization working. This is owner evidence, not upload/download/revocation/power-loss evidence. Phase 3 now imports the validated core, metadata, transport and RAM-only auth into the editor. Settings > More > GitHub sync provides explicit opt-in, connect/disconnect, manual upload, bounded remote listing and download-as-copy; touch and Classic/keyboard routes share geometry. No auto-sync. Existing document/buffer/selection/recovery remain separate. See GITHUB-SYNC-PHASE3.md for limits, verification and acceptance instructions. Desktop 18/18 suites pass (14,660 assertions); native synthetic Pro touch and Classic buttons reach the sync panel without runtime fault or Problems diagnostics. Transfers/hardware remain NOT TESTED. Latest website access failed; verified public contract is still 2.18 (see XTAPP-API-REVIEW-2026-11-13.md).
+
+## Phase 2 public setup and separate sign-in diagnostic
+
+Owner supplied public Client ID/App ID, login and docs repo/main. Configured
+domain/sync_config.lua; connector verified private repo ID 1455886532 and main.
+Added separate tools/github-auth-check app (inkwrite.githubauthcheck, saved v0.0.2),
+explicit builder, button/touch/lifecycle tests. No document operation controls.
+Auth public status now includes a bounded HTTP code for diagnosing failed HTTPS;
+no response bodies/credentials are exposed. Writer runtime/version remain 1.0.6.
+Pro native starts/draws/touch handles with fault null and zero Studio diagnostics.
+GitHub device-code request: Studio 502 twice; independent desktop HTTPS 200 with
+valid device-flow response. No codes persisted/printed, no token exchange.
+See tools/github-auth-check/README.md for device instructions and exact limits.
+Live device authorization and App scope/revocation acceptance still pending.
+Classic native startup and Back exit pass with fault null. Desktop 16/16 suites,
+14,448 assertions. Diagnostic cloud project 803d9404-1aa3-469a-8547-96e7425bf08d
+saved successfully; exported ten Lua sources + manifest are verified separately.
+
+## 1.0.6 — Phase 2 Direct GitHub, live acceptance pending
+
+Owner chose Direct GitHub/RAM-only sessions; App not set up. Added sync_auth.lua
+with device flow, bounded polling/expiry, scope checks, fixed API routes and
+credential-free status; read/write adapters use Phase 1 payload validation. Every
+operation rechecks account/App/private-repository/branch scope; revoked grants
+clear session. Pause/disconnect cancels and discards access/refresh material.
+No editor import, net permission, save hook, local import or actual credentials.
+Added GitHub setup guide and accepted the ADR's architecture choice. JSON tests
+now model host null with a sentinel. Tests/delivery counts are in the final
+artifact. Real HTTPS/auth/hardware acceptance waits for the registered App.
+Desktop: 15/15 suites pass, 14,423 assertions; auth suite 109, six sync/safety
+suites 343. Development snapshot version 1.0.6 matches the next Studio save;
+the only editor-runtime change is the version string. Sync code remains inactive
+as development text references in Studio. The original released project is untouched.
+
+## Phase 2 preparation — no runtime release
+
+Added inactive bounded HTTPS and host hash/base64 adapters, with two mock suites.
+All 14 suites pass, 14,314 assertions. Architecture choice and public GitHub App
+setup questions are pending; no credentials/auth implementation/hosting chosen.
+Phase 2 is incomplete. Cloud stays verified Phase 1 v1.0.5, runtime unchanged.
+See GITHUB-SYNC-PHASE2.md. Real HTTPS/hardware acceptance remains NOT TESTED.
+
+## 1.0.5 — GitHub sync phase 1 (inactive core, 2026-11-12)
+
+Owner accepted filename fix and authorized the next phase. Added pure sync
+state/decisions, scoped schema-1 metadata with checksum/revision/readback guards,
+bounded Contents payload conversion, fake transport/fixtures and failure tests.
+No editor hook, transport, credentials, public-document overwrite or auth decision.
+All sync modules remain text references in the Studio export until integration.
+Repository modules keep their original paths. See GITHUB-SYNC-PHASE1.md.
+
+Repaired four statistics test doubles (`saved=0`) and updated the snapshot test
+to the current cloud controller's 120-second forced save with a pre-boundary
+assertion. Existing runtime save logic unchanged. All 12 suites pass, 14,256
+assertions (176 sync/safety). Studio Save automatically advanced 1.0.3 to 1.0.4;
+the follow-up 1.0.5 aligns manifest/runtime. Only runtime version string changes.
+Cloud-save identity/version and GitHub commit are in the phase 1 delivery artifact.
+Physical-device sync/network remains NOT TESTED. Phase 2 is the auth/transport gate.
+
+## 1.0.3 — restore filenames in Open file
+
+The Open file list placed filenames in a 24 px text box even when the preferred
+20 px font returned a taller line height. The host could fit zero lines, leaving
+size/action controls visible but no filename. Labels now get row height minus
+8 px; library row height is at least the returned UI line height plus 8 px.
+Shared geometry keeps pagination and touch rows aligned, with size/actions
+centered in taller rows. No filename/document-byte transformation or extra font
+opens. New controller regression: 464 assertions for 24/28/36/44 px line heights,
+portrait/landscape, short/long/accented names, touch/keyboard opening and exact
+UTF-8/CRLF preservation without public writes. The four older statistics-double
+failures remain recorded; this fix does not claim they pass. Final native/cloud
+and GitHub evidence is recorded in the delivery artifact after verification.
+
+## 2026-11-12 — correct Studio snapshot source boundaries
+
+The initial phase 0 cloud snapshot was saved with probe/test Lua as executable
+editor modules, causing the reported missing-module, missing-net-permission and
+test-double API diagnostics. Corrected exporter keeps only the seven editor Lua
+files executable; supporting source is preserved under docs/development/ as text
+with a restore map. The probe remains a separate app. No net permission is added
+to inkWrite. Removed ctx.fonts.small emergency fallback in favor of medium/large;
+preferred fonts still use fonts:size. See STUDIO-PROJECT-LAYOUT.md and the
+post-repair delivery verification for actual Studio/cloud results. This does not
+resolve or hide the separately recorded desktop regression failures.
+
+## 2026-11-12 — GitHub sync phase 0 (no editor integration)
+
+Explicitly opened the latest original cloud inkWrite (project
+bc6ebcee-26df-4d19-b814-b9e488605d51), after exporting a local backup. Imported
+the cloud source on phase0/github-sync-audit; manifest 1.0.1, runtime 1.0.2 and
+README 0.1.51 conflict. Preserve and review that drift before release. Cloud
+autosave is 5 s idle / 120 s forced, superseding the old 30 s notes below.
+
+Added GITHUB-SYNC-AUDIT.md, ADR-0001-GITHUB-SYNC-TRANSPORT-AUTH.md,
+GITHUB-SYNC-BASELINE.json, a reproducible Fengari runner and an isolated
+tools/github-sync-probe app. No inkWrite Lua, identity, network permission,
+storage schema, editor UI or save behavior changed after the baseline import.
+No production credentials or Worker deployment. ADR is proposed, not approved.
+
+GitHub 0.1.47 existing tests: 7/7 pass, 13532 returned assertions including
+overlapping suites. Latest cloud: 3/7 pass, four existing mock-statistics
+compatibility failures before and after phase 0. Existing tests unchanged;
+regression acceptance is not green. Probe: 93 mock assertions pass. Native
+preview upload was rejected by automatic approval review as an unapproved
+external source upload. No workaround used; both preview/device variants are
+NOT TESTED. Owner approval is required for the standalone probe upload before
+native preview can proceed. Cloud retrieval does not prove a new cloud save.
+
+See the audit for exact tests, API evidence, save hook and next gates. The old
+docs/GITHUB_SYNC.json describes the 0.1.47 release, not this branch or document
+sync. No phase 1 integration or production transport should be inferred.
+
 ## Maintenance 0.1.47 — follow the Ink App font preference
 
 Confirmed the reported font bug in the controller: empty font_name selected ctx.fonts.medium/large directly, bypassing the user's font; its picker called the removed installed/open API. Migrated to ctx.fonts:size(px), without checking the retired ttf capability flag. Preload 20/24/30 px UI fonts during on_load and acquire the selected body size in lifecycle/input callbacks. Drawing reuses those objects; no font opens occur in on_draw. All writing, preview, chrome, lists, help and virtual-key labels use the preferred font. Six bounded sizes: 20/24/28/30/32/36. No extra reserve or framebuffer. The host owns cache/memory.
@@ -76,6 +261,141 @@ Manifest and runtime version: 0.1.38; API 2.17. Physical-device timing remains
 unverified; desktop regressions cannot establish e-ink latency.
 
 # inkWrite handover
+
+## Maintenance 0.1.51 — Markdown source shortcuts (no rendering)
+
+Owner asked whether inkWrite really supports Markdown, and chose the cheap path
+now with a preview toggle possibly later.
+
+Answer recorded plainly: inkWrite writes and edits Markdown *source*. It does
+not render it. Headings are not enlarged, `**bold**` is not bold, list and
+quote markers stay visible, and there is no preview mode. The only formatting
+help before this version was Ctrl+B / Ctrl+I, which wrap the selection in
+`**` or `*` and refuse in .txt files.
+
+Added this turn (marker insertion only; no layout or drawing change):
+
+| Key | Effect |
+| --- | --- |
+| Ctrl+1..Ctrl+6 | Set that heading level on every selected line |
+| Ctrl+0 | Remove the heading marker |
+| Ctrl+L | Toggle `- ` bullet |
+| Ctrl+Quote | Toggle `> ` quote |
+| Ctrl+K | Link: wraps selection as `[text]()`, unwraps an existing link, or inserts `[]()` with the caret inside the brackets |
+
+Behaviour:
+
+- All of them are editor-only and .md-only; .txt gives the existing "Markdown
+  formatting is available in .md files" message (now shared by
+  markdown_doc/markdown_action).
+- Heading and marker commands apply to every line the selection touches and
+  replace the block in one buffer call, so byte offsets stay valid and undo
+  records a single step.
+- Set-heading replaces an existing level rather than stacking (`## ` -> `# `),
+  toggles off when the level already matches, and leaves `#hashtag` alone
+  because a heading needs a space after the hashes.
+- Two scoping bugs were caught and fixed during the work: markdown_action was
+  first declared before markdown_doc (nil capture at definition time), and the
+  first caret heuristic used a tail offset; markers now records the caret's line
+  and column, then re-applies it after the marker shift.
+
+Verification: the 16-case transformation suite (heading add/toggle/replace,
+hashtag non-heading, empty line, quote and bullet toggles, caret before/after
+shift on line 1 and line 2 of a multi-line block) passed. Native preview booted
+with an .md document and drew plain source. Ctrl combinations cannot be sent
+through run_project, so the key path itself was checked by reading the code.
+
+Still not supported on purpose: on-screen rendering, hidden markers, and
+rendered preview. That is the later, expensive piece.
+
+## Maintenance 0.1.50 — counters show last / average / worst
+
+Owner corrected the 0.1.49 reading: draw was 76 ms, not 763. So nothing
+regressed; input 13, layout 10, draw 76, key to prepare 30 are all at or better
+than 0.1.47. Key to drawn (1100 ms) is dominated by the panel: a frame takes
+about 650 ms and a request during a refresh merges into the next one, so honest
+values are 650-1300 ms. The 28 ms reading in 0.1.47 was one lucky sample taken
+as a draw finished, which is why a max-only counter misled twice.
+
+Change: timing() now keeps last, count and sum as well as max, and the page
+prints "last/avg/worst" per counter. Six metrics no longer fit the More menu's
+box (about 126 px in landscape), so Memory & timing became its own view
+("timing") with a full page; the menu item still opens it and Back/pager
+returns. Text is capped at ten lines so the landscape page does not clip.
+
+Save went 140 -> 183 ms: that is the SD card, not the app; the write is outside
+the keystroke path either way.
+
+## Maintenance 0.1.49 — the 250 ms window was a regression; revert it
+
+Owner measured the 0.1.48 diagnostics on the device:
+
+| Counter | 0.1.47 | 0.1.48 |
+| --- | --- | --- |
+| input | 15 | 9 |
+| layout | 9 | 4 |
+| draw | 77 | 68 |
+| queue | 30 | 303 |
+| save | 140 | 132 |
+| input-to-draw | 28 | 1049 |
+
+Conclusion: three of the four 0.1.48 changes helped; the fourth caused a clear
+regression. `queue` is measured from the queued keystroke to preparation, so it
+rising 30 → 303 ms is almost exactly the added 250 ms coalescing window, and
+input-to-draw 28 → 1049 ms is that window plus the wait for a full refresh.
+
+Cause: on this platform a frame requested while a refresh is in progress is
+merged into the next frame anyway (contract section 5). A coalescing window
+cannot therefore make anything appear sooner; it can only hold the newest text
+back past the frame that was already coming. The 30 ms window is a work-saving
+grouping for keys pressed within a few milliseconds, not a pace setter.
+
+Fix: COALESCE_MS back to 30. Left alone: the SD-write gating (save fell 140 →
+132 min and the gesture no longer sits in a keystroke), the single statistics
+update per edit (input 15 → 9 ms), and the longer full-refresh deferral. That
+last one is bounded by FULL_REFRESH_HOLD=25000 so a marathon session still gets
+ghosting cleared.
+
+Diagnostics wording: the labels now say "key to prepare" and "key to drawn",
+and state that key to drawn includes the screen refresh. `queue` is the app-side
+part that can be tuned; `key to drawn` is dominated by the panel.
+
+Not verified: the device numbers above are the owner's; this turn's Studio
+run was a boot/smoke check in both orientations, and no desktop harness run was
+made here. Physical Bluetooth transport remains unmeasured by the app.
+
+## Maintenance 0.1.48 — keep SD writes out of the typing path
+
+Owner asked what else can make the device respond faster while typing on the
+Bluetooth keyboard. The panel sets the floor: one presented frame is about
+650 ms, and a frame requested during a refresh merges into the next one. The
+app's own input, layout and draw callbacks were already small (owner-reported
+maxima 16/12/10 ms); the reported outliers were queue 197 ms and save 203 ms,
+both SD writes. Four app-side changes, none of which shortens the panel time:
+
+1. The statistics checkpoint is no longer written from a key callback. An edit
+   only marks the minute checkpoint as due; `on_tick` writes it once the keyboard
+   has been quiet for 700 ms, or unconditionally when 180 s have passed since the
+   last checkpoint. Pause/exit and opening Statistics still flush immediately.
+2. Autosave no longer fires on "30 continuous dirty seconds". It fires after 5 s
+   without a keypress, and forced after 120 dirty seconds so a marathon session
+   is still saved. The idle tick is now the only place a public save starts.
+3. One word/statistics update per edit instead of two (the word delta computed
+   in `insert` is passed through `changed`).
+4. The typing coalescing window grows from 30 ms to 250 ms, and the automatic
+   full-refresh deferral from 1.5 s to 4 s per edit. A frame takes about 650 ms
+   anyway, so the shorter window only re-ran layout for a frame that could not be
+   shown sooner, and 1.5 s let a full refresh land inside slow typing.
+
+Save guarantees are unchanged: recovery is still written before the public
+file, external edits still produce a conflict copy, and a failed save stays
+visible and blocks the next write until another edit or an explicit save.
+Statistics after a sudden power loss can now lose up to about three minutes
+instead of one during an unbroken session; pause and exit lose nothing.
+HD/Bluetooth transport and the firmware input queue remain outside the app.
+
+Verification: native preview only in this turn; the desktop harness in the parent
+workspace was not re-run here, and the physical Bluetooth timing is unmeasured.
 
 ## Identity and scope
 

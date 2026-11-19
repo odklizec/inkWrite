@@ -1,0 +1,9 @@
+{
+  "app_id": "inkwrite.phase0.probe",
+  "display_name": "inkWrite HTTPS probe",
+  "version": "0.0.1",
+  "api": "2.18",
+  "entry": "index.lua",
+  "permissions": ["net"],
+  "display": {"orientation": "system"}
+}
