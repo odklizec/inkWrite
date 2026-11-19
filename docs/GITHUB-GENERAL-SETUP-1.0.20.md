@@ -56,8 +56,9 @@ Automated tests use synthetic GitHub responses, never real tokens or private
 documents. They cover the whole UI/Auth/Session handoff, remembered credentials,
 wrong account/permissions, forged/stale choices, failure during final binding,
 profile isolation, migration, bounded profiles, corrupt/failed/ambiguous storage
-and interrupted activation. Native preview is pending because XTApp Studio is timing out; a second
-account and physical-device switching also still need acceptance.
+and interrupted activation. The owner saved this implementation as cloud version 1.0.21, verified on
+2026-11-19. Native preview, a second account and physical-device switching
+still need acceptance.
 
 Device checks:
 
