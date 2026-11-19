@@ -1,4 +1,40 @@
-## Split-screen foundation test branch - 2026-11-19
+## Functional split-screen test branch - 2026-11-19
+
+Continued test/split-screen-foundation-2026-11-19 with horizontal/vertical panes,
+1:1 / 2:1 / 1:2 ratios, normal/focus rendering, independent document/view/undo
+state and active-pane file commands. Settings > More > Split screen or
+Ctrl+Shift+P opens presets. Ctrl+Tab switches; Classic Left/Right select A/B;
+focus OK opens Split settings. Pro header tap activates, header hold opens
+settings, and text tap activates/places the caret. Both headers retain filename,
+dirty/error prefix and active fill/marker. Save label/browser identify A/B.
+
+Workspace storage is enabled only by deliberate split use. Added validated
+small preferences, discovery of both recovery slots, guarded legacy migration,
+clean recovery cleanup before replacement, hidden-session autosave, Save all /
+Discard all exit and failed-write protection. Scope-aware remote replacement
+handles loaded inactive sessions; automatic uploads wait while either session
+is dirty/failed. Library operations cannot manage another open pane's file.
+Inactive frames are cached and wrapping stays outside draw. A settings-save
+failure retains both discoverable recovery records; malformed records remain
+protected. Earlier single-pane builds do not load the slot format.
+
+33/33 desktop suites pass, 19,532 assertions. New writer suite: 194 checks;
+actual sync workflow suite now 62 checks, including dirty active A preserved
+while updating B, late B edits/replacement identity rejection and auto guards.
+Static export closure has 25 runtime Lua modules and the two existing icons.
+Separate preview identity inkwrite.split-screen-preview is running in plugin
+project f1ec8532-6e59-448c-aa1c-751b802089d1. Native Pro verified both documents,
+directions, all ratios, normal/focus, rotation, header activation, virtual typing
+and Save B. App-file reads verified Alpha unchanged at 148 bytes and Bravo with
+an appended q at 155 bytes. Final native Classic restart/Left/Right/OK/Back all
+passed with null faults; final Pro restart retained focus and workspace state.
+Both devices reported empty diagnostics. Final source revision is
+b7dca52c987916f7b50fa9762b880617a3e5fbdfc47f4d7f4c596d5e5e46e29f.
+No real GitHub transfer, physical hardware or SD interruption test is claimed.
+See SPLIT-SCREEN-PLAN.md for usage and remaining device gates. Manifest/API/menu
+numbering are unchanged. No original cloud update, main merge or Store release.
+
+## Historical split-screen foundation milestone - 2026-11-19
 
 Started from main 2dc835e (manifest 1.0.22, runtime constant 1.0.20) on
 test/split-screen-foundation-2026-11-19. Document/view state now lives in

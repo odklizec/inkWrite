@@ -24,7 +24,8 @@ local function setup(track)
  c.hex={encode=function(_,t)return (t:gsub('.',function(x)return string.format('%02x',x:byte())end))end}
  c.base64={encode=function(_,t)return Native.base64_encode(t)end,decode=function(_,t)return Native.base64_decode(t)end}
  h.files={['ideas.md']=OLD};h.public_writes=0
- c.files={size=function(_,name)local t=h.files[name];return t and #t or nil,t and nil or 'not_found'end,
+ c.files={list=function()local out={};for name,text in pairs(h.files)do out[#out+1]={name=name,size=#text}end;table.sort(out,function(a,b)return a.name<b.name end);return out end,
+ size=function(_,name)local t=h.files[name];return t and #t or nil,t and nil or 'not_found'end,
  read=function(_,name,a,z)local t=h.files[name];return t and t:sub(a+1,a+z)or nil,t and nil or 'not_found'end,
  write=function(_,name,t)
    if (h.fail_backup and name~='ideas.md')or (h.fail_main and name=='ideas.md')then return nil,'io_error'end
@@ -32,7 +33,7 @@ local function setup(track)
  end}
  local rawwrite=c.storage.write
  c.storage.write=function(self,name,t)
-   if h.fail_recovery and name=='recovery.txt'then return nil,'io_error'end
+   if h.fail_recovery and name:match('^recovery.*%.txt$')then return nil,'io_error'end
    local ok,e=rawwrite(self,name,t)
    if name=='recovery.txt'and h.race_after_recovery then h.files['ideas.md']='External concurrent edit'end
    return ok,e
@@ -169,4 +170,51 @@ local measure=h.a.ui_small.measure;local badge_measures=0
 h.a.ui_small.measure=function(self,text)if text=='GitHub !'then badge_measures=badge_measures+1 end;return measure(self,text)end
 App.input(h.ctx,{type='key',source='keyboard',phase='down',code='KeyA',text='a',mods={}})
 check(badge_measures==0,'typing never computes pointer-only badge geometry or measures its label')
+-- Both loaded panes participate in real sync snapshot/apply and auto guards.
+local Session=require('domain.editor_session')
+local Workspace=require('domain.workspace')
+local function split_with_other()
+ local x=setup()
+ App.input(x.ctx,{type='key',source='keyboard',phase='down',code='KeyP',mods={ctrl=true,shift=true}})
+ App.input(x.ctx,{type='key',source='keyboard',phase='down',code='ArrowDown',mods={}})
+ App.input(x.ctx,{type='key',source='keyboard',phase='down',code='Enter',mods={}})
+ assert(x.a.workspace.split)
+ x.files['other.md']='Other local'
+ App.input(x.ctx,{type='key',source='keyboard',phase='down',code='Tab',mods={ctrl=true}})
+ App.input(x.ctx,{type='key',source='keyboard',phase='down',code='KeyO',mods={ctrl=true}})
+ App.input(x.ctx,{type='key',source='keyboard',phase='down',code='ArrowDown',mods={}})
+ App.input(x.ctx,{type='key',source='keyboard',phase='down',code='Enter',mods={}})
+ local editor=x.a.editor;assert(editor.doc.name=='other.md')
+ App.input(x.ctx,{type='key',source='keyboard',phase='down',code='Tab',mods={ctrl=true}})
+ return x,editor
+end
+h,b=split_with_other();local active=h.a.editor
+App.input(h.ctx,{type='key',source='keyboard',phase='down',code='KeyA',text='a',mods={}})
+local active_bytes=active.buffer:text();local recovery=h.private.files['recovery-a.txt']
+h.s:review_document(h.ctx,'other.md');h:verify(h.s);h:respond(F.file('other.md','Other GitHub',F.NEW))
+check(h.s.review and h.s.review.file.identity==b.doc,'named review captures inactive B session identity rather than treating B as an unloaded disk file')
+h.s:resolve_review(h.ctx,'local');h:verify(h.s);h:respond(F.file('other.md','Other GitHub',F.NEW))
+check(h.a.editor==active and active.dirty and active.buffer:text()==active_bytes,'remote update of B preserves dirty active A and its identity')
+check(b.buffer:text()=='Other GitHub'and h.files['other.md']=='Other GitHub'and not b.dirty,'confirmed remote update changes the loaded inactive B buffer and saved base')
+check(h.private.files['recovery-a.txt']==recovery and h.files['before-sync-001.md']=='Other local','B update leaves A recovery intact and creates the verified B backup')
+h,b=split_with_other()
+h.s:review_document(h.ctx,'other.md');h:verify(h.s);h:respond(F.file('other.md','Other GitHub',F.NEW))
+b.buffer:replace(0,0,'Unsaved B ');Session.changed(b,h.time,0);local writes=h.public_writes;local calls=h.calls
+h.s:resolve_review(h.ctx,'local')
+check(h.calls==calls and h.public_writes==writes and b.dirty and b.buffer:text()=='Unsaved B Other local','late dirty edit in inactive B rejects local replacement before network or IO')
+h,b=split_with_other();h.s:review_document(h.ctx,'other.md');h:verify(h.s)
+local replacement=assert(Session.new('other.md','Other local','Other local',false,h.time,2))
+assert(Workspace.put(h.a.workspace,2,replacement));h:respond(F.file('other.md','Other GitHub',F.NEW))
+check(not h.s.review and h.files['other.md']=='Other local'and replacement.buffer:text()=='Other local','stale review callback cannot attach to a replacement B session with the same filename and revision')
+h,b=split_with_other();h.s:review_document(h.ctx,'OTHER.md');local calls=h.calls
+check(not h.s.review and not h.s.busy,'case alias of inactive B cannot bypass loaded-session guards')
+h,b=split_with_other();h.s:review_document(h.ctx,'other.md');h:verify(h.s);h:respond(F.file('other.md','Other GitHub',F.NEW))
+h.fail_recovery=true;h.s:resolve_review(h.ctx,'local');h:verify(h.s);h:respond(F.file('other.md','Other GitHub',F.NEW))
+check(h.files['other.md']=='Other local'and b.buffer:text()=='Other local','failed B recovery write prevents remote replacement of inactive B')
+h,b=split_with_other();h.ctx.state.github_sync_auto=true;h.ctx.state.github_sync_delay=15
+App.input(h.ctx,{type='key',source='keyboard',phase='down',code='KeyS',mods={ctrl=true}})
+check(#h.a.sync.auto.items==1,'saving A queues its saved version')
+h.time=h.time+25000;b.buffer:replace(0,0,'Dirty B ');Session.changed(b,h.time,0)
+local calls=h.calls;App.tick(h.ctx)
+check(h.calls==calls and not h.s.busy and b.dirty,'dirty inactive B blocks automatic uploads while active A is clean')
 return n

@@ -18,6 +18,7 @@ function M.new(session,hooks,dependencies)
  local function delay(c)local v=c.state.github_sync_delay;return (v==15 or v==60)and v*1000 or 30000 end
  local function digest(t)return p and Sync.digest(p.hash,t)end
  local function blocked(c)
+  if hooks.auto_blocked then return hooks.auto_blocked(c)==true end
   local v=hooks.describe and hooks.describe()or {}
   return v.dirty==true or v.blocked==true
  end

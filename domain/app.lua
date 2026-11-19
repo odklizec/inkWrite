@@ -1,6 +1,8 @@
 local Buffer=require("domain.buffer")
 local Docs=require("domain.documents")
 local Session=require("domain.editor_session")
+local Workspace=require("domain.workspace")
+local Panes=require("domain.pane_geometry")
 local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
@@ -23,6 +25,7 @@ local function preferred_font(ctx,px)
   return px>=28 and ctx.fonts.large or ctx.fonts.medium
 end
 local prepare_frame
+local switch_pane, split_menu, split_action, persist_workspace
 local function extend_budget(ctx)
   if ctx.budget then ctx.budget:extend() end
 end
@@ -66,7 +69,8 @@ local function github_badge(ctx,l)
   local x=A.focus_mode and ((l.chrome_left+l.chrome_right-width)//2)or (l.chrome_right-44-width-8)
   return {x=x,y=(ctx.screen.occlusion or {}).top or 0,w=width,h=44,name=name}
 end
-local function geometry(ctx)
+local function geometry(ctx,editor,slot)
+  editor=editor or A.editor;slot=slot or A.workspace.active
   local o=ctx.screen.occlusion or {left=0,right=0,top=0,bottom=0}
   local margin=A.view=="editor" and A.margin or 24
   local l={x=o.left+margin,y=o.top+18,right=ctx.screen.width-o.right-margin,bottom=ctx.screen.height-o.bottom-18}
@@ -88,6 +92,7 @@ local function geometry(ctx)
   l.step=font(ctx).line_height+A.spacing; l.count=math.max(1,(l.text_bottom-l.body)//l.step)
   l.row=44
   if A.view=="library" then l.row=math.max(l.row,A.ui_small.line_height+8) end
+  if A.view=='split'then l.row=math.max(l.row,A.ui_medium.line_height+8)end
   l.list_bottom=l.foot-8; l.per=math.max(1,(l.list_bottom-l.body)//l.row)
   l.key=table.concat({l.x,l.y,l.w,l.body,l.foot,l.step},":")
   if A.view=="editor" and not A.focus_mode then
@@ -101,6 +106,16 @@ local function geometry(ctx)
       l.panel_top=l.dock-156
       for i=1,3 do l.controls[i+4]={x=l.chrome_left,y=l.panel_top+(i-1)*52,w=l.chrome_right-l.chrome_left,h=52} end
     end
+  end
+  if A.view=='editor'and A.workspace.split then
+    l.workspace_notice={x=l.x,y=l.foot,w=l.w}
+    local layout=Panes.split({x=l.x,y=l.body,w=l.w,h=math.max(0,l.text_bottom-l.body)},A.workspace.direction,A.workspace.ratio)
+    local pane=slot==1 and layout.a or layout.b
+    local area=Panes.text_area(pane,math.max(44,A.ui_small.line_height+8),A.margin,font(ctx).line_height,A.spacing)
+    l.panes=layout;l.pane=pane;l.pane_header=area.header
+    l.split_key=table.concat({layout.a.x,layout.a.y,layout.a.w,layout.a.h,layout.b.x,layout.b.y,layout.b.w,layout.b.h,A.ui_small.line_height,font(ctx).line_height,A.spacing},':')
+    l.x=area.text.x;l.w=area.text.w;l.right=l.x+l.w;l.body=area.text.y;l.text_bottom=l.body+area.text.h;l.foot=l.text_bottom
+    l.count=area.count;l.key=table.concat({slot,l.x,l.body,l.w,l.text_bottom,l.step},':')
   end
   if A.view=="typography" then
     l.type_controls={};local cs=l.type_controls
@@ -131,29 +146,30 @@ local function geometry(ctx)
   end
   return l
 end
-local function refresh_layout(ctx)
+local function refresh_layout(ctx,editor,slot)
+  editor=editor or A.editor
   extend_budget(ctx)
-  local l=geometry(ctx); local b=A.editor.buffer
+  local l=geometry(ctx,editor,slot); local b=editor.buffer
   local f=font(ctx)
-  local same=A.editor.layout_font==f and A.editor.layout_width==l.w and A.editor.layout_count==l.count and A.editor.layout_top==A.editor.top
-  if not same or A.editor.layout_revision~=b.revision then
-    A.editor.rows=Layout.rows(b,f,l.w,A.editor.top,l.count,same and A.editor.rows or nil,A.editor.layout_dirty_from)
+  local same=editor.layout_font==f and editor.layout_width==l.w and editor.layout_count==l.count and editor.layout_top==editor.top
+  if not same or editor.layout_revision~=b.revision then
+    editor.rows=Layout.rows(b,f,l.w,editor.top,l.count,same and editor.rows or nil,editor.layout_dirty_from)
   end
-  if not A.editor.browsing and not A.editor.text_tap and not Layout.caret_row(A.editor.rows,b.pos) then
-    A.editor.top=math.max(0,b.pos-512)
-    while not b:is_boundary(A.editor.top) do A.editor.top=A.editor.top+1 end
+  if l.count>0 and not editor.browsing and not editor.text_tap and not Layout.caret_row(editor.rows,b.pos) then
+    editor.top=math.max(0,b.pos-512)
+    while not b:is_boundary(editor.top) do editor.top=editor.top+1 end
     -- Start near the caret, then drop leading rows until it is in view.
     for _=1,32 do
-      A.editor.rows=Layout.rows(b,font(ctx),l.w,A.editor.top,l.count)
-      if Layout.caret_row(A.editor.rows,b.pos) then break end
-      if not A.editor.rows[2] then A.editor.top=b.pos; break end
-      A.editor.top=A.editor.rows[2].a
+      editor.rows=Layout.rows(b,font(ctx),l.w,editor.top,l.count)
+      if Layout.caret_row(editor.rows,b.pos) then break end
+      if not editor.rows[2] then editor.top=b.pos; break end
+      editor.top=editor.rows[2].a
     end
-    A.editor.rows=Layout.rows(b,font(ctx),l.w,A.editor.top,l.count)
+    editor.rows=Layout.rows(b,font(ctx),l.w,editor.top,l.count)
   end
-  A.editor.layout_revision=b.revision; A.editor.layout_pos=b.pos
-  A.editor.layout_font=f; A.editor.layout_width=l.w; A.editor.layout_count=l.count; A.editor.layout_top=A.editor.top
-  A.editor.layout_dirty_from=nil
+  editor.layout_revision=b.revision; editor.layout_pos=b.pos
+  editor.layout_font=f; editor.layout_width=l.w; editor.layout_count=l.count; editor.layout_top=editor.top
+  editor.layout_dirty_from=nil
 end
 local function cancel_redraw()
   if A.editor.redraw_timer then A.editor.redraw_timer:cancel(); A.editor.redraw_timer=nil end
@@ -351,48 +367,66 @@ local function format(ctx,marker)
   else A.editor.anchor=a end
   changed(ctx,a)
 end
-local function save(ctx)
+local function save(ctx,editor)
+  editor=editor or A.editor
   extend_budget(ctx)
-  A.editor.typing_time=nil; A.typing_run=nil
+  editor.typing_time=nil; A.typing_run=nil
   if A.blocked then message(ctx,"Recovery needs attention; existing files are protected"); return false end
-  if not A.editor.doc or not A.editor.buffer then return false end
-  if not A.editor.dirty and A.editor.doc.base~=nil then
-    if A.sync then A.sync.auto:saved(ctx,A.editor.doc.name,A.editor.buffer:text())end
-    ctx.state.last=A.editor.doc.name;ctx.state.cursor=A.editor.buffer.pos
+  if not editor.doc or not editor.buffer then return false end
+  if not editor.dirty and editor.doc.base~=nil then
+    if A.sync then A.sync.auto:saved(ctx,editor.doc.name,editor.buffer:text())end
+    if editor==A.editor then ctx.state.last=editor.doc.name;ctx.state.cursor=editor.buffer.pos end;Workspace.remember(ctx,A.workspace)
     A.message=nil;ctx:invalidate(); return true
   end
-  A.editor.status="Saving..."
+  editor.status="Saving..."
   local started=now(ctx)
-  local ok,result,err=pcall(Session.save,ctx,A.editor)
+  local ok,result,err=pcall(Session.save,ctx,editor,Workspace.reserved_names(A.workspace))
   timing(A.timing.save,age(now(ctx),started))
   if not ok or not result then
-    A.editor.status="SAVE FAILED"; A.editor.save_failed=true
+    editor.status="SAVE FAILED"; editor.save_failed=true
     message(ctx,tostring(ok and err or result)); return false
   end
-  if A.sync then A.sync.auto:saved(ctx,A.editor.doc.name,A.editor.buffer:text())end
-  ctx.state.last=A.editor.doc.name; ctx.state.cursor=A.editor.buffer.pos
+  if A.sync then A.sync.auto:saved(ctx,editor.doc.name,editor.buffer:text())end
+  if editor==A.editor then ctx.state.last=editor.doc.name;ctx.state.cursor=editor.buffer.pos end;Workspace.remember(ctx,A.workspace)
   A.message=nil;ctx:invalidate()
   return true
 end
 local function close_request(ctx)
   cancel_navigation();cancel_redraw();A.keyboard:reset();A.panel=nil;A.action_focus=nil
-  A.close_modal={choice=1,dirty=A.editor.dirty};ctx:invalidate()
+  A.close_modal={choice=1,dirty=Workspace.dirty(A.workspace)};ctx:invalidate()
 end
 local function close_choice(ctx,i)
   local modal=A.close_modal;if not modal then return end
   if i==1 then A.close_modal=nil;ctx:invalidate();return end
   if not modal.dirty then A.close_modal=nil;ctx:quit();return end
+  A.close_modal=nil
   if i==2 then
-    A.close_modal=nil
-    if save(ctx) then ctx:quit() end
-  else
-    local rec,e=Docs.load_recovery(ctx)
-    if rec==nil then A.close_modal=nil;message(ctx,"Cannot discard recovery: "..tostring(e));return end
-    if rec and rec.name==A.editor.doc.name then
-      local ok,err=Docs.call(ctx.storage,"remove","recovery.txt")
-      if not ok then A.close_modal=nil;message(ctx,"Cannot discard recovery: "..tostring(err));return end
+    for slot=1,2 do local editor=A.workspace.sessions[slot]
+      if editor and editor.dirty and not save(ctx,editor)then return end
     end
-    A.discard_exit=true;A.close_modal=nil;ctx:quit()
+    Workspace.remember(ctx,A.workspace);ctx:quit()
+  else
+    for slot=1,2 do local editor=A.workspace.sessions[slot]
+      if editor and editor.dirty then
+        local rec,e=Docs.load_recovery(ctx,editor.recovery_slot)
+        if rec==nil or (rec and rec.name~=editor.doc.name)then message(ctx,'Cannot discard recovery: '..tostring(e or 'document changed'));return end
+      end
+    end
+    for slot=1,2 do local editor=A.workspace.sessions[slot]
+      if editor and editor.dirty then
+        local ok,e=Docs.call(ctx.storage,'remove',Docs.recovery_key(editor.recovery_slot))
+        if not ok then
+          local repaired=true
+          for j=1,2 do local other=A.workspace.sessions[j];if other and other.dirty then
+            other.recovery_doc=nil
+            if not Session.checkpoint(ctx,other)then other.save_failed=true;repaired=false end
+          end end
+          if not repaired then A.blocked=true end
+          message(ctx,repaired and ('Cannot discard recovery: '..tostring(e))or 'Discard interrupted. Recovery write failed; keep inkWrite open and check the SD card.');return
+        end
+      end
+    end
+    A.discard_exit=true;Workspace.remember(ctx,A.workspace);ctx:quit()
   end
 end
 local function close_rect(ctx)
@@ -401,10 +435,20 @@ local function close_rect(ctx)
 end
 local function set_document(ctx,name,text,base,dirty)
   local next_editor=assert(Session.new(name,text,base,dirty,now(ctx),A.editor.recovery_slot))
+  if A.loaded and A.workspace.slotted then
+    local rec,e=Docs.load_recovery(ctx,A.editor.recovery_slot)
+    if rec==nil then message(ctx,'Cannot replace pane: '..tostring(e));return false end
+    if rec then
+      if rec.name~=A.editor.doc.name or rec.text~=A.editor.buffer:text()then message(ctx,'Pane recovery differs; reopen inkWrite before replacing it');return false end
+      local ok,why=Docs.call(ctx.storage,'remove',Docs.recovery_key(A.editor.recovery_slot))
+      if not ok then message(ctx,'Cannot replace pane recovery: '..tostring(why));return false end
+    end
+  end
   cancel_navigation();A.panel=nil;A.action_focus=nil
   cancel_redraw()
-  A.editor=next_editor;A.view="editor"
-  refresh_layout(ctx); ctx:invalidate()
+  A.editor=next_editor;A.workspace.sessions[A.workspace.active]=next_editor;A.view="editor"
+  Workspace.remember(ctx,A.workspace)
+  refresh_layout(ctx); ctx:invalidate();return true
 end
 local function new_document(ctx,plain)
   extend_budget(ctx)
@@ -412,9 +456,9 @@ local function new_document(ctx,plain)
   if A.editor.dirty and not save(ctx) then return end
   local t=ctx.clock:now()
   local prefix=t.valid and string.format("%04d-%02d-%02d",t.year,t.month,t.day) or "undated"
-  local name,e=Docs.fresh_name(ctx,prefix,plain and ".txt" or ".md")
+  local name,e=Docs.fresh_name(ctx,prefix,plain and ".txt" or ".md",Workspace.reserved_names(A.workspace))
   if not name then message(ctx,tostring(e)); return false end
-  set_document(ctx,name,"",nil,true)
+  if not set_document(ctx,name,"",nil,true)then return false end
   A.message=nil
   return true
 end
@@ -422,6 +466,7 @@ local function library(ctx)
   if A.editor.dirty and not save(ctx) then return end
   local rows,e=Docs.list(ctx)
   if not rows then message(ctx,"Cannot list SD files: "..tostring(e)); return end
+  A.file_target=A.workspace.active
   A.files=rows; A.focus=1;A.file_action=1; A.view="library"; A.message=nil; ctx:invalidate()
 end
 local function reload_files(ctx,selected)
@@ -432,13 +477,18 @@ local function reload_files(ctx,selected)
   A.view="library";A.file_action=1;ctx:invalidate()
 end
 local function clear_matching_recovery(ctx,name)
-  local rec,e=Docs.load_recovery(ctx)
-  if rec==nil then message(ctx,"Recovery check: "..tostring(e));return false end
-  if rec and rec.name:lower()==name:lower() then
-    local text=Docs.read(ctx,name)
-    if text~=rec.text then message(ctx,"Recovery differs; reopen inkWrite before managing this file");return false end
-    local ok,er=Docs.call(ctx.storage,"remove","recovery.txt")
-    if not ok then message(ctx,"Recovery cleanup: "..tostring(er));return false end
+  local loaded=Workspace.find(A.workspace,name)
+  if loaded and loaded~=A.workspace.active then message(ctx,'File is open in pane '..(loaded==1 and 'A' or 'B')..'. Activate it first.');return false end
+  local count=A.workspace.slotted and 2 or 1
+  for i=1,count do
+    local slot=A.workspace.slotted and i or nil
+    local rec,e=Docs.load_recovery(ctx,slot)
+    if rec==nil then message(ctx,'Recovery check: '..tostring(e));return false end
+    if rec and rec.name:lower()==name:lower()then
+      if Docs.read(ctx,name)~=rec.text then message(ctx,'Recovery differs; reopen inkWrite before managing this file');return false end
+      local ok,why=Docs.call(ctx.storage,'remove',Docs.recovery_key(slot))
+      if not ok then message(ctx,'Recovery cleanup: '..tostring(why));return false end
+    end
   end
   return true
 end
@@ -452,10 +502,11 @@ local function file_action(ctx,action)
     A.file_dialog=nil
     if not name then c:invalidate();return end
     if not Docs.name_ok(name) then message(c,"Use a valid .md or .txt filename (up to 128 UTF-8 bytes)");return end
+    if Workspace.find(A.workspace,name)then message(c,"That filename is already open");return end
     if not clear_matching_recovery(c,old) then return end
     local job,err=Docs.rename(c,old,name,function(c,ok,why)
       A.file_job=nil
-      if ok and A.editor.doc.name:lower()==old:lower() then A.editor.doc.name=name;c.state.last=name end
+      if ok and A.editor.doc.name:lower()==old:lower() then A.editor.doc.name=name;c.state.last=name;A.editor.recovery_doc=nil;Workspace.remember(c,A.workspace) end
       reload_files(c,ok and name or old)
       if ok then A.message=nil else A.message="Rename: "..tostring(why) end
       c:invalidate()
@@ -474,7 +525,7 @@ local function confirm_delete(ctx)
   local current=A.editor.doc.name:lower()==row.name:lower()
   local nextname
   if current then
-    nextname,e=Docs.fresh_name(ctx,"untitled")
+    nextname,e=Docs.fresh_name(ctx,"untitled",nil,Workspace.reserved_names(A.workspace))
     if not nextname then message(ctx,tostring(e));return end
   end
   local ok,err=Docs.call(ctx.files,"remove",row.name)
@@ -489,11 +540,13 @@ end
 local function open_file(ctx,name)
   extend_budget(ctx)
   if A.blocked then return end
+  local existing=Workspace.find(A.workspace,name)
+  if existing then switch_pane(ctx,existing);A.view='editor';return end
+  if A.file_target and A.file_target~=A.workspace.active then message(ctx,'Target pane changed; reopen the file browser');return end
   if A.editor.dirty and not save(ctx) then return end
   local text,e=Docs.read(ctx,name)
   if not text then message(ctx,tostring(e)); return end
-  set_document(ctx,name,text,text,false)
-  ctx.state.last=name
+  if set_document(ctx,name,text,text,false)then ctx.state.last=name end
 end
 local function today(ctx)
   extend_budget(ctx)
@@ -502,9 +555,10 @@ local function today(ctx)
   if not t.valid then message(ctx,"Set the device date before opening today's journal");return end
   if A.editor.dirty and not save(ctx) then return end
   local name=string.format("%04d-%02d-%02d-journal.md",t.year,t.month,t.day)
-  if A.editor.doc.name==name then A.view="editor";ctx:invalidate();return end
+  local existing=Workspace.find(A.workspace,name)
+  if existing then switch_pane(ctx,existing);A.view="editor";ctx:invalidate();return end
   local text,e=Docs.read(ctx,name)
-  if text then set_document(ctx,name,text,text,false);ctx.state.last=name
+  if text then if set_document(ctx,name,text,text,false)then ctx.state.last=name end
   elseif e=="not_found" then set_document(ctx,name,"",nil,true)
   else message(ctx,"Journal not opened: "..tostring(e)) end
 end
@@ -551,7 +605,13 @@ local function typography_rows()
     "Size: "..A.font_px.." px","Line spacing: +"..A.spacing.." px","Margins: "..A.margin.." px","Font settings"}
 end
 local function list_rows()
-  if A.view=="menu" then return {commands[6],commands[7],commands[8],"Statistics","GitHub sync"} end
+  if A.view=='split'then
+    local w=A.workspace
+    return {'Back to writing','Horizontal: top / bottom'..(w.split and w.direction=='horizontal'and ' *'or ''),'Vertical: left / right'..(w.split and w.direction=='vertical'and ' *'or ''),
+      'Ratio 1:1'..(w.ratio=='1:1'and ' *'or ''),'Ratio 2:1'..(w.ratio=='2:1'and ' *'or ''),
+      'Ratio 1:2'..(w.ratio=='1:2'and ' *'or ''),'Switch active pane','Single pane',A.focus_mode and 'Exit focus mode'or 'Enter focus mode'}
+  end
+  if A.view=="menu" then return {commands[6],commands[7],commands[8],"Statistics","GitHub sync","Split screen"} end
   if A.view=="layouts" then
     local rows={"On-screen keyboard: "..(A.virtual and "On" or "Off")}
     for _,name in ipairs(Keyboard.names) do rows[#rows+1]=name end
@@ -618,16 +678,19 @@ local function command(ctx,i)
   if i==11 then
     A.focus_mode=not A.focus_mode;ctx.state.focus_mode=A.focus_mode
     A.view="editor";A.editor.layout_revision=nil;A.editor.touch_geometry=nil
+    persist_workspace(ctx)
   end
   if i==12 then today(ctx) end
   if i==13 then new_document(ctx,true) end
   if i==15 then A.virtual=nil;A.view="statistics";A.stats_mode=A.stats_mode or 1;A.stats:tick(ctx,true) end
   if i==14 then A.view="layouts";A.focus=1 end
   if i==16 then cancel_navigation();A.sync:open(ctx)end
+  if i==17 then split_menu(ctx)end
   ctx:invalidate()
 end
 local function activate(ctx,i)
-  if A.view=="menu" then command(ctx,({6,7,8,15,16})[i])
+  if A.view=="menu" then command(ctx,({6,7,8,15,16,17})[i])
+  elseif A.view=="split" then split_action(ctx,i)
   elseif A.view=="layouts" then
     if i==1 then A.virtual=not A.virtual
     else
@@ -661,9 +724,50 @@ local function chrome_action(ctx,i)
   else command(ctx,({11,10,5,14})[i-4]) end
   ctx:invalidate()
 end
+persist_workspace=function(ctx)
+  Workspace.remember(ctx,A.workspace)
+  if A.workspace.slotted and ctx.save_state then
+    local ok,result=pcall(ctx.save_state,ctx)
+    if not ok or not result then message(ctx,'Workspace settings could not be saved; document recovery is retained')end
+  end
+end
+switch_pane=function(ctx,slot)
+  if A.blocked then message(ctx,'Recovery needs attention; panes are protected');return false end
+  if slot==A.workspace.active then return true end
+  extend_budget(ctx);cancel_navigation();cancel_redraw()
+  local ok,e=Workspace.activate(ctx,A.workspace,slot)
+  if not ok then message(ctx,'Cannot switch pane: '..tostring(e));return false end
+  A.editor.text_tap=nil;A.editor=A.workspace.sessions[slot];A.editor.text_tap=nil
+  A.keyboard:reset();A.panel=nil;A.action_focus=nil;A.file_target=nil
+  persist_workspace(ctx);prepare_frame(ctx);ctx:invalidate();return true
+end
+split_menu=function(ctx)
+  cancel_navigation();cancel_redraw();A.keyboard:reset();A.panel=nil;A.action_focus=nil
+  A.view='split';A.focus=1;A.message=nil;ctx:invalidate()
+end
+split_action=function(ctx,i)
+  if i==1 then A.view='editor';ctx:invalidate();return end
+  if i==9 then command(ctx,11);return end
+  if A.blocked then message(ctx,'Recovery needs attention; split settings are protected');return end
+  local w=A.workspace
+  if i>=2 and i<=6 then
+    extend_budget(ctx)
+    local ok,e=Workspace.enable(ctx,w,now(ctx))
+    if not ok then message(ctx,'Split screen: '..tostring(e));return end
+    A.editor=w.sessions[w.active]
+    if i==2 or i==3 then w.direction=i==2 and 'horizontal'or 'vertical'
+    else w.ratio=({'1:1','2:1','1:2'})[i-3]end
+  elseif i==7 then
+    if not w.slotted or not switch_pane(ctx,w.active%2+1)then return end
+  elseif i==8 then w.split=false
+  else return end
+  cancel_navigation();cancel_redraw();A.view='editor'
+  persist_workspace(ctx);prepare_frame(ctx);ctx:invalidate()
+end
 function M.load(ctx)
   extend_budget(ctx)
   A={view="editor",focus=1,large=ctx.state.large==true,caps=false,editor=assert(Session.new("untitled-001.md","",nil,false,now(ctx)))}
+  A.workspace=Workspace.new();A.workspace.sessions[1]=A.editor
   A.timing={}
   for _,key in ipairs({"input","layout","draw","queue","save","compose"}) do A.timing[key]={last=0,max=0,n=0,sum=0} end
   A.stats=Stats.new(ctx)
@@ -678,49 +782,54 @@ function M.load(ctx)
   A.ui_small=preferred_font(ctx,20);A.ui_medium=preferred_font(ctx,24);A.ui_large=preferred_font(ctx,30)
   local setup=require('domain.sync_setup').new(ctx)
   A.sync=SyncUI.new({
-    reserved_name=function()return A.editor.doc and A.editor.doc.name end,
+    reserved_name=function()return Workspace.reserved_names(A.workspace) end,
+    auto_blocked=function()return A.blocked or Workspace.auto_blocked(A.workspace)end,
     can_import=function()return not A.blocked end,
     describe=function()return {name=A.editor.doc and A.editor.doc.name,dirty=A.editor.dirty,blocked=A.blocked or A.editor.save_failed}end,
     apply_remote=function(c,captured,text)
       extend_budget(c)
+      if A.blocked then return nil end
+      local slot=Workspace.find(A.workspace,captured.name)
+      local editor=slot and A.workspace.sessions[slot]
       if captured.identity==captured.name then
-        if A.blocked or A.editor.dirty or A.editor.doc.name:lower()==captured.name:lower()then return nil end
-        local backup=Docs.update_from_remote(c,captured.name,captured.bytes,text)
+        if editor or Workspace.dirty(A.workspace)then return nil end
+        local backup=Docs.update_from_remote(c,captured.name,captured.bytes,text,nil,Workspace.reserved_names(A.workspace))
         if not backup then return nil end
         local rec=Docs.load_recovery(c)
         if rec and rec.name==captured.name and rec.text==captured.bytes then Docs.call(c.storage,'remove','recovery.txt')end
         c:invalidate();return true,backup
       end
-      if A.blocked or A.editor.dirty or A.editor.doc~=captured.identity or A.editor.buffer.revision~=captured.revision
-        or A.editor.doc.name~=captured.name or A.editor.doc.base~=captured.bytes or A.editor.buffer:text()~=captured.bytes then return nil end
+      if not editor or editor.dirty or editor.doc~=captured.identity or editor.buffer.revision~=captured.revision
+        or editor.doc.name~=captured.name or editor.doc.base~=captured.bytes or editor.buffer:text()~=captured.bytes then return nil end
       local next_buffer=Buffer.new(text);if not next_buffer then return nil end
-      local pos=math.min(A.editor.buffer.pos,#text)
+      local pos=math.min(editor.buffer.pos,#text)
       while pos>0 and not next_buffer:is_boundary(pos)do pos=pos-1 end
       next_buffer:seek(pos)
-      local backup=Docs.update_from_remote(c,captured.name,captured.bytes,text)
+      local backup=Docs.update_from_remote(c,captured.name,captured.bytes,text,editor.recovery_slot,Workspace.reserved_names(A.workspace))
       if not backup then return nil end
-      cancel_navigation();cancel_redraw()
-      A.editor.doc={name=captured.name,base=text};A.editor.buffer=next_buffer;A.editor.anchor=nil;A.editor.top=0
-      A.editor.layout_revision=nil;A.editor.layout_dirty_from=0;A.editor.goal_x=nil;A.editor.browsing=false
-      A.editor.recovery_doc=nil;A.editor.recovery_revision=nil;A.editor.dirty=false;A.editor.save_failed=false;A.editor.status='Saved on SD card'
-      c.state.last=A.editor.doc.name;c.state.cursor=pos
-      local rec=Docs.load_recovery(c)
-      if rec and rec.name==captured.name and rec.text==captured.bytes then Docs.call(c.storage,'remove','recovery.txt')end
-      refresh_layout(c);c:invalidate()
-      return true,backup
+      if editor==A.editor then cancel_navigation();cancel_redraw()end
+      editor.doc={name=captured.name,base=text};editor.buffer=next_buffer;editor.anchor=nil;editor.top=0
+      editor.layout_revision=nil;editor.layout_dirty_from=0;editor.goal_x=nil;editor.browsing=false
+      editor.recovery_doc=nil;editor.recovery_revision=nil;editor.dirty=false;editor.save_failed=false;editor.status='Saved on SD card';editor.prepared=nil
+      if editor==A.editor then c.state.last=editor.doc.name;c.state.cursor=pos end
+      Workspace.remember(c,A.workspace)
+      local rec=Docs.load_recovery(c,editor.recovery_slot)
+      if rec and rec.name==captured.name and rec.text==captured.bytes then Docs.call(c.storage,'remove',Docs.recovery_key(editor.recovery_slot))end
+      prepare_frame(c);c:invalidate();return true,backup
     end,
     snapshot=function(c,save_first,target)
-      if target and A.editor.doc and target~=A.editor.doc.name then
-        if target:lower()==A.editor.doc.name:lower()then return nil end
-        if A.blocked or (save_first and A.editor.dirty and not save(c))then return nil end
-        local bytes=Docs.read(c,target)
-        if not bytes then return nil end
-        return {identity=target,name=target,bytes=bytes,saved=true,exists=true,revision=0}
+      if A.blocked then return nil end
+      target=target or A.editor.doc.name
+      local slot=Workspace.find(A.workspace,target)
+      local editor=slot and A.workspace.sessions[slot]
+      if editor then
+        if target~=editor.doc.name then return nil end
+        if save_first and (editor.dirty or editor.doc.base==nil)and not save(c,editor)then return nil end
+        return Session.snapshot(c,editor)
       end
-      if A.blocked or not A.editor.doc then return nil end
-      if save_first and (A.editor.dirty or A.editor.doc.base==nil)and not save(c)then return nil end
-      if A.editor.dirty or A.editor.doc.base==nil then return nil end
-      return Session.snapshot(c,A.editor)
+      if save_first and A.editor.dirty and not save(c)then return nil end
+      local bytes=Docs.read(c,target);if not bytes then return nil end
+      return {identity=target,name=target,bytes=bytes,saved=true,exists=true,revision=0}
     end},A.ui_small,A.ui_medium,{setup=setup,config=setup.config})
   A.sync.auto:load(ctx,ctx.state.github_sync_auto==false)
   A.font_name="";A.font_px=A.large and 30 or 24
@@ -732,6 +841,11 @@ function M.load(ctx)
   if not ctx.files or not ctx.input.listen then A.blocked=true; A.message="Update to Gancao firmware supporting XTApp API 2.11"; return end
   local listened,e=ctx.input:listen({keyboard=true})
   if not listened then A.blocked=true; A.message="Keyboard listener failed: "..tostring(e); return end
+  local restored,restore_error=Workspace.restore(ctx,now(ctx))
+  if restored==nil then A.blocked=true;A.message=tostring(restore_error);A.view='files_help';refresh_layout(ctx);return end
+  if restored then
+    A.workspace=restored;A.editor=restored.sessions[restored.active];A.message=restore_error
+  else
   local rec,err=Docs.load_recovery(ctx)
   if rec==nil then
     A.blocked=true; A.message="Recovery protected: "..tostring(err); A.view="files_help"; refresh_layout(ctx); return
@@ -768,8 +882,9 @@ function M.load(ctx)
       A.message="Last file not opened: "..tostring(se); A.view="files_help"; A.blocked=true
     end
   else new_document(ctx) end
+  end
   refresh_layout(ctx)
-  ctx:set_tick(1000)
+  A.loaded=true;ctx:set_tick(1000)
 end
 local function vertical(ctx,d,shift,page,browse)
   refresh_layout(ctx)
@@ -871,6 +986,13 @@ local function keyboard(ctx,ev)
     end
     return true
   end
+  if A.view=='editor'and shortcut and code=='Tab'then
+    if down and A.workspace.split then switch_pane(ctx,A.workspace.active%2+1)end
+    return true
+  end
+  if A.view=='editor'and shortcut and mods.shift and code=='KeyP'then
+    if down then split_menu(ctx)end;return true
+  end
   if A.view=='editor'and code=='KeyG'and shortcut and not mods.shift then
     if down then
       cancel_navigation();cancel_redraw();A.keyboard:reset();A.editor.typing_time=nil;A.panel=nil;A.action_focus=nil
@@ -945,7 +1067,7 @@ local function keyboard(ctx,ev)
     ctx:invalidate();return true
   end
   if A.view~="editor" then
-    if A.view=="menu" or A.view=="library" or A.view=="typography" or A.view=="fonts" or A.view=="layouts" then
+    if A.view=="split" or A.view=="menu" or A.view=="library" or A.view=="typography" or A.view=="fonts" or A.view=="layouts" then
       local rows=list_rows()
       if #rows==0 then return true end
       if A.view=="library" then
@@ -1134,6 +1256,39 @@ local function virtual_press(ctx,label)
   else insert(ctx,label=="Space" and " " or label);A.virtual_shift=nil end
   ctx:invalidate()
 end
+local function pane_touch(ctx,ev)
+  local function consumed()A.pointer_down_x=nil;A.pointer_down_y=nil;return true end
+  if A.view~='editor'or not A.workspace.split or A.panel or A.action_focus then A.pane_touch=nil;return false end
+  local l=geometry(ctx)
+  if ev.phase=='cancel'then A.pane_touch=nil;return consumed()end
+  local start=A.pane_touch
+  if ev.phase=='down'then
+    local slot=Panes.hit(l.panes,ev.x,ev.y)
+    A.pane_touch=slot and {slot=slot,x=ev.x,y=ev.y,key=l.split_key}or nil
+    return false
+  end
+  if ev.phase~='up'and ev.phase~='hold'then return false end
+  local x=ev.down_x or (start and start.x)or ev.x
+  local y=ev.down_y or (start and start.y)or ev.y
+  if ev.phase=='up'then A.pane_touch=nil end
+  -- Existing screen-edge gestures retain priority over pane activation.
+  if (ev.gesture=='swipe_right'and x<32)or (ev.gesture=='swipe_left'and x>=ctx.screen.width-32)then return false end
+  local slot=start and start.slot or Panes.hit(l.panes,x,y)
+  if not slot then return false end
+  if (start and start.key~=l.split_key)or A.presented_split_key~=l.split_key then
+    message(ctx,'Layout is updating; try again after refresh');return consumed()
+  end
+  if Panes.hit(l.panes,ev.x,ev.y)~=slot then A.editor.text_tap=nil;return consumed()end
+  local editor=A.workspace.sessions[slot];local pane=geometry(ctx,editor,slot)
+  local header=y<pane.pane_header.y+pane.pane_header.h
+  if not switch_pane(ctx,slot)then return consumed()end
+  if header then
+    if ev.phase=='hold'then split_menu(ctx)
+    elseif ev.gesture=='tap'or ev.gesture=='double_tap'then publish_touch_frame(ctx)end
+    return consumed()
+  end
+  return false
+end
 function M.input(ctx,ev)
   if A.sync then A.sync.auto:interrupt(ctx)end
   if A.sync and A.sync.active then return A.sync:input(ctx,ev)end
@@ -1199,6 +1354,7 @@ function M.input(ctx,ev)
     end
     return true
   end
+  if ev.type=='pointer'and pane_touch(ctx,ev)then return true end
   if A.virtual and A.view=="editor" and ev.type=="key" and ev.source~="keyboard" and ev.key~="back" then
     if ev.phase=="down" then
       local keys=virtual_keys(ctx);A.virtual_focus=A.virtual_focus or 1
@@ -1299,7 +1455,8 @@ function M.input(ctx,ev)
     end
     if ev.phase~="down" then return true end
     if A.view=="editor" then
-      if A.focus_mode and ev.key=="ok" then command(ctx,11);A.action_focus=1
+      if A.focus_mode and ev.key=='ok'then split_menu(ctx)
+      elseif A.workspace.split and not A.action_focus and not A.panel and (ev.key=='left'or ev.key=='right')then switch_pane(ctx,ev.key=='left'and 1 or 2)
       elseif A.action_focus or A.panel then
         local codes={up="ArrowUp",down="ArrowDown",left="ArrowLeft",right="ArrowRight",ok="Enter"}
         if codes[ev.key] then keyboard(ctx,{code=codes[ev.key],phase="down",mods={}}) end
@@ -1345,7 +1502,7 @@ function M.input(ctx,ev)
       if ev.x<l.chrome_left+100 then A.confirm_file=nil;A.view=A.view=="delete_confirm" and "library" or "editor";ctx:invalidate()
       elseif A.view~="delete_confirm" then
         local rows=list_rows();local d=ev.x<l.chrome_left+210 and -1 or ev.x>l.chrome_right-100 and 1 or 0
-        if A.view=="menu" or A.view=="library" or A.view=="typography" or A.view=="fonts" or A.view=="layouts" then A.focus=math.max(1,math.min(math.max(1,#rows),A.focus+d*l.per))
+        if A.view=="split" or A.view=="menu" or A.view=="library" or A.view=="typography" or A.view=="fonts" or A.view=="layouts" then A.focus=math.max(1,math.min(math.max(1,#rows),A.focus+d*l.per))
         else A.help_page=math.max(1,math.min(A.help_pages or 1,(A.help_page or 1)+d)) end
         ctx:invalidate()
       end
@@ -1355,7 +1512,7 @@ function M.input(ctx,ev)
       end
     elseif A.view=="typography" then
       for i,c in ipairs(l.type_controls) do if ev.x>=c.x and ev.x<c.x+c.w and ev.y>=c.y and ev.y<c.y+c.h then A.type_focus=i;type_control(ctx,c);break end end
-    elseif A.view=="menu" or A.view=="library" or A.view=="fonts" or A.view=="layouts" then
+    elseif A.view=="split" or A.view=="menu" or A.view=="library" or A.view=="fonts" or A.view=="layouts" then
       local row=(ev.y-l.body)//l.row+1
       local per=l.per
       local first=((A.focus-1)//per)*per+1
@@ -1401,9 +1558,15 @@ function M.tick(ctx)
   local due=A.stats.saved and age(t,A.stats.saved)>=STATS_FORCE_MS
   A.stats:tick(ctx,quiet or (due and true) or false)
   if A.close_modal then return end
-  if A.editor.dirty and not A.blocked and not A.editor.save_failed then
-    local forced=A.editor.first_dirty and age(t,A.editor.first_dirty)>=SAVE_FORCE_MS
-    if (quiet and age(t,A.editor.last_edit)>=5000) or forced then save(ctx) end
+  if not A.blocked then
+    for offset=0,1 do
+      local slot=((A.autosave_slot or A.workspace.active)-1+offset)%2+1
+      local editor=A.workspace.sessions[slot]
+      if editor and editor.dirty and not editor.save_failed then
+        local forced=editor.first_dirty and age(t,editor.first_dirty)>=SAVE_FORCE_MS
+        if (quiet and age(t,editor.last_edit)>=5000)or forced then save(ctx,editor);A.autosave_slot=slot%2+1;break end
+      end
+    end
   end
   if A.sync and not A.file_job and not A.virtual and not A.languages then A.sync.auto:tick(ctx)end
 end
@@ -1413,6 +1576,7 @@ local function checkpoint_recovery(ctx)
   return Session.checkpoint(ctx,A.editor)
 end
 function M.pause(ctx)
+  Workspace.remember(ctx,A.workspace)
   if A.sync then A.sync:pause(ctx)end
   A.right_alt=nil;A.layout_chord=nil
   extend_budget(ctx)
@@ -1430,6 +1594,7 @@ function M.pause(ctx)
 end
 function M.resume(ctx) A.right_alt=nil;A.layout_chord=nil;A.stats:resume(ctx);ctx.input:listen({keyboard=true}); refresh_layout(ctx);if A.sync then A.sync:resume(ctx)end; ctx:invalidate() end
 function M.leave(ctx)
+  if A then Workspace.remember(ctx,A.workspace)end
   if A and A.sync then A.sync:leave(ctx)end
   if A and A.prepare_timer then A.prepare_timer:cancel();A.prepare_timer=nil end
   if A and A.stats then A.stats:pause(ctx) end
@@ -1459,16 +1624,17 @@ end
 local function help_text(ctx)
   if A.view=="font_help" then return "Your Ink App font\n\nChoose the font in Ink App > Settings > Font. Then close and reopen inkWrite to start a new font session.\n\ninkWrite follows that choice for writing and controls. This page shows the font actually returned by the device.\n\nPut .ttf files in the SD card fonts folder. If the chosen font is unavailable or cannot open, the device may use the reader font or a built-in fallback.\n\nSize, line spacing and margins remain in inkWrite Typography. They change appearance only; saved document bytes are unchanged."
   elseif A.view=="files_help" then return "Your writing lives on the SD card:\n\n"..(ctx.files and ctx.files.path or "/AppFiles/inkwrite").."\n\nSave first. Power down the device, remove the SD card, then copy the .md or .txt files using a card reader.\n\nOpen them in any text editor. No account or conversion needed.\n\nPrivate recovery is removed on uninstall; saved public files remain."
-  elseif A.view=="help" then return "Ctrl+H or F1   Keyboard help\nCtrl+Shift+T   Focus toolbar\nEscape   Back to writing\nCtrl+S   Save\nCtrl+N   New document\nCtrl+O   Open file\nCtrl+J   Today journal\nCtrl+Z   Undo\nCtrl+Shift+Z   Redo\nCtrl+A   Select all\nCtrl+C / X / V   Copy / cut / paste\nCtrl+B / I   Bold / italic (.md)\nCtrl+1 to Ctrl+6   Heading 1-6 (.md)\nCtrl+0   Remove heading (.md)\nCtrl+L   Bullet list (.md)\nCtrl+Quote   Quote line (.md)\nCtrl+K   Link (.md)\nCtrl+Shift+F   Toggle focus\nCtrl+Shift+S   Rotate screen\nAlt+Shift / Ctrl+Space   Next keyboard\nCtrl+R   Full screen refresh\n\nMarkdown shortcuts insert the markers in the text and work on every line the selection touches. The editor shows plain source; nothing is rendered.\n\nLeft / Right   Move character\nCtrl+Left / Right   Move word\nHome / End   Start / end of line\nCtrl+Home / End   Start / end of file\nPageUp / PageDown   Move page\nShift+movement   Select text\nEscape / Back   Return / menu\n\nTouch controls\nDouble-tap word   Select word\nTriple-tap word   Select sentence\nDouble-tap empty space   Focus\nSwipe up / down   Browse text\nLeft edge >   Shortcuts\nRight edge <   Statistics\nBottom edge up   Virtual keyboard\nKeyboard icon   Choose language\nWord count   Statistics\n\nType a letter before its accent.\nClipboard stays inside inkWrite."
+  elseif A.view=="help" then return "Ctrl+H or F1   Keyboard help\nCtrl+Shift+T   Focus toolbar\nEscape   Back to writing\nCtrl+S   Save\nCtrl+N   New document\nCtrl+O   Open file\nCtrl+J   Today journal\nCtrl+Z   Undo\nCtrl+Shift+Z   Redo\nCtrl+A   Select all\nCtrl+C / X / V   Copy / cut / paste\nCtrl+B / I   Bold / italic (.md)\nCtrl+1 to Ctrl+6   Heading 1-6 (.md)\nCtrl+0   Remove heading (.md)\nCtrl+L   Bullet list (.md)\nCtrl+Quote   Quote line (.md)\nCtrl+K   Link (.md)\nCtrl+Shift+F   Toggle focus\nCtrl+Shift+P   Split screen\nCtrl+Tab   Switch pane\nCtrl+Shift+S   Rotate screen\nAlt+Shift / Ctrl+Space   Next keyboard\nCtrl+R   Full screen refresh\n\nMarkdown shortcuts insert the markers in the text and work on every line the selection touches. The editor shows plain source; nothing is rendered.\n\nLeft / Right   Move character\nCtrl+Left / Right   Move word\nHome / End   Start / end of line\nCtrl+Home / End   Start / end of file\nPageUp / PageDown   Move page\nShift+movement   Select text\nEscape / Back   Return / menu\n\nTouch controls\nDouble-tap word   Select word\nTriple-tap word   Select sentence\nDouble-tap empty space   Focus\nSwipe up / down   Browse text\nLeft edge >   Shortcuts\nRight edge <   Statistics\nBottom edge up   Virtual keyboard\nKeyboard icon   Choose language\nWord count   Statistics\n\nType a letter before its accent.\nClipboard stays inside inkWrite."
   end
 end
 -- Layout is prepared in lifecycle/input/timer callbacks, never in draw.
-prepare_frame=function(ctx)
-  if not A or not A.editor.buffer then return end
+local function prepare_one(ctx,editor,slot)
+  editor=editor or A.editor
+  if not A or not editor.buffer then return end
   local started=now(ctx)
-  local l=geometry(ctx);local f=font(ctx);local ui=A.ui_medium
+  local l=geometry(ctx,editor,slot);local f=font(ctx);local ui=A.ui_medium
   if A.view=="editor" then
-    if A.editor.layout_revision~=A.editor.buffer.revision or A.editor.layout_pos~=A.editor.buffer.pos or A.editor.layout_width~=l.w or A.editor.layout_count~=l.count or A.editor.layout_font~=f or A.editor.layout_top~=A.editor.top then refresh_layout(ctx) end
+    if editor.layout_revision~=editor.buffer.revision or editor.layout_pos~=editor.buffer.pos or editor.layout_width~=l.w or editor.layout_count~=l.count or editor.layout_font~=f or editor.layout_top~=editor.top then refresh_layout(ctx,editor,slot) end
   elseif A.view=="typography" then
     local p=l.preview;local cache=A.preview_cache
     if not cache or cache.font~=f or cache.width~=p.w or cache.count~=p.count then
@@ -1489,12 +1655,12 @@ prepare_frame=function(ctx)
       A.help_page=math.max(1,math.min(A.help_page or 1,A.help_pages))
     end
   end
-  local p={view=A.view,key=l.key,font=f,doc=A.editor.doc,revision=A.editor.buffer.revision,pos=A.editor.buffer.pos,top=A.editor.top,anchor=A.editor.anchor}
+  local p={view=A.view,key=l.key,font=f,doc=editor.doc,revision=editor.buffer.revision,pos=editor.buffer.pos,top=editor.top,anchor=editor.anchor}
   if A.view=="editor" then
     -- A composed frame may run after another edit. Keep rows and all byte-
     -- dependent drawing data together; never slice the newer buffer in draw.
-    p.rows=A.editor.rows;p.size=A.editor.buffer.size;p.selection={}
-    local ca,cz=selection()
+    p.rows=editor.rows;p.size=editor.buffer.size;p.selection={}
+    local ca,cz=Session.selection(editor)
     for i,r in ipairs(p.rows) do
       local sa,sz=math.max(ca,r.a),math.min(cz,r.z)
       if sz>sa then
@@ -1507,11 +1673,21 @@ prepare_frame=function(ctx)
       local r=p.rows[ci]
       p.caret={row=ci,x=f:measure(r.text:sub(1,p.pos-r.a))}
     end
-    p.queued_since=A.editor.pending_frame_since;A.editor.pending_frame_since=nil
+    p.queued_since=editor.pending_frame_since;editor.pending_frame_since=nil
     if p.queued_since then timing(A.timing.queue,age(started,p.queued_since)) end
     timing(A.timing.layout,age(now(ctx),started))
   end
-  A.editor.prepared=p
+  editor.prepared=p
+end
+prepare_frame=function(ctx)
+  if not A then return end
+  prepare_one(ctx,A.editor,A.workspace.active)
+  if A.view=='editor'and A.workspace.split then
+    local slot=A.workspace.active%2+1;local editor=A.workspace.sessions[slot]
+    local l=geometry(ctx,editor,slot);local p=editor.prepared
+    if not p or p.view~=A.view or p.key~=l.key or p.font~=font(ctx)or p.doc~=editor.doc
+      or p.revision~=editor.buffer.revision or p.pos~=editor.buffer.pos or p.anchor~=editor.anchor or p.top~=editor.top then prepare_one(ctx,editor,slot)end
+  end
 end
 local function frame_ready(l,f)
   local p=A.editor.prepared
@@ -1528,6 +1704,15 @@ local function help_view(ctx,g,ui,l)
   pager(g,ui,l,A.help_page,A.help_pages)
 end
 local function position_line(ctx,g,l,p)
+  if l.pane then
+    local last=p.rows[#p.rows];local length=l.text_bottom-l.body
+    if p.size>0 and last and length>0 then
+      local visible=math.max(0,last.nextp-p.top);local height=math.min(length,math.max(6,length*visible//p.size))
+      local offset=math.min(length-height,(length-height)*p.top//math.max(1,p.size-visible))
+      local x=l.pane.x+l.pane.w-3;g:line(x,l.body,x,l.text_bottom);g:rect(x-1,l.body+offset,2,height,{fill=true})
+    end
+    return
+  end
   local n=p.size;local last=p.rows[#p.rows]
   if n==0 or (p.top==0 and last and last.z==n) then return end
   local visible=last and math.max(0,last.nextp-p.top) or 0
@@ -1593,7 +1778,7 @@ local function editor_chrome(ctx,g,l)
   local code=Keyboard.code(A.keyboard.id)
   local badge=github_badge(ctx,l)
   if not focused then
-    local titles={menu="More",library="Open file",typography="Typography",fonts="Fonts",layouts="Keyboard",font_help="Fonts",orientation_help="Screen rotate",files_help="SD files",help="Shortcuts",delete_confirm="Delete file?",statistics="Statistics",timing="Memory & timing"}
+    local titles={split="Split screen",menu="More",library=A.workspace.slotted and ('Open file: pane '..(A.workspace.active==1 and 'A'or 'B'))or 'Open file',typography="Typography",fonts="Fonts",layouts="Keyboard",font_help="Fonts",orientation_help="Screen rotate",files_help="SD files",help="Shortcuts",delete_confirm="Delete file?",statistics="Statistics",timing="Memory & timing"}
     box(g,A.ui_medium,l.chrome_left,top+2,l.chrome_right-l.chrome_left-(A.view=="menu" and 120 or A.view=="editor" and 44 or 0)-(badge and badge.w+8 or 0),36,titles[A.view] or A.editor.doc.name)
     if A.view=="menu" then g:text(l.chrome_right,top+20,M.VERSION,{font=ui,align="right",valign="middle"}) end
     if A.view=="editor" then local x=l.chrome_right-22;g:line(x-7,top+13,x+7,top+27);g:line(x+7,top+13,x-7,top+27) end
@@ -1613,10 +1798,11 @@ local function editor_chrome(ctx,g,l)
   if not l.controls then return end
   g:line(l.chrome_left,l.dock,l.chrome_right,l.dock)
   local labels={"New","Open","Save","Settings"}
+  if A.workspace.split then labels[3]=A.workspace.active==1 and "Save A"or "Save B"end
   for i=1,4 do
     local r=l.controls[i];local cx=r.x+r.w//2
     if A.action_focus==i then g:rect(r.x+2,r.y+2,r.w-4,r.h-4,{radius=4,line_width=2}) end
-    icon(g,labels[i],cx-10,r.y+8)
+    icon(g,i==3 and "Save"or labels[i],cx-10,r.y+8)
     g:text(cx,r.y+48,labels[i],{font=ui,align="center",valign="middle"})
   end
   if not A.panel then return end
@@ -1637,6 +1823,41 @@ local function editor_chrome(ctx,g,l)
     end
   end
 end
+local function draw_editor(ctx,g,l,editor,active)
+  local f=font(ctx);local ui=A.ui_medium
+    local p=editor.prepared
+    editor.touch_rows=p.rows;editor.touch_revision=p.revision;editor.touch_font=f;editor.touch_doc=p.doc;editor.touch_geometry=l.key
+    if p.size==0 then
+      if not l.pane then box(g,ui,l.x,l.body+56,l.w,100,'A little space to write.\nConnect your Bluetooth keyboard.')
+      elseif l.count>0 then
+        local hint_y=l.body+f.line_height+8
+        if l.text_bottom-hint_y>=A.ui_small.line_height then box(g,A.ui_small,l.x,hint_y,l.w,l.text_bottom-hint_y,'Open or create a document')end
+      end
+    end
+    for i,r in ipairs(p.rows) do
+      local y=l.body+(i-1)*l.step
+      local s=p.selection[i]
+      if s then
+        g:rect(l.x+s.x,y,s.w,f.line_height,{color=15,fill=true})
+        g:text(l.x,y,r.text,{font=f,color=15})
+        g:text(l.x+s.x,y,s.text,{font=f,color=0})
+      else g:text(l.x,y,r.text,{font=f}) end
+    end
+    if active and p.caret then
+      local x=l.x+p.caret.x;local y=l.body+(p.caret.row-1)*l.step
+      g:line(x,y,x,y+f.line_height,{line_width=2})
+    end
+    position_line(ctx,g,l,p)
+  if l.pane then
+    local h=l.pane_header;local label=(editor.recovery_slot==1 and 'A'or 'B')..(editor.save_failed and '! 'or editor.dirty and '* 'or ' ')..(active and '> 'or '')..editor.doc.name
+    if h.w>0 and h.h>0 then
+      g:rect(h.x,h.y,h.w,h.h,{fill=active,color=15,line_width=active and 2 or 1})
+      if h.h>=A.ui_small.line_height and h.w>12 then g:text_box(h.x+6,h.y,h.w-12,h.h,label,{font=A.ui_small,overflow='ellipsis',valign='middle',color=active and 0 or 15})end
+    end
+    if l.count==0 and l.text_bottom-l.body>=A.ui_small.line_height then box(g,A.ui_small,l.x,l.body,l.w,l.text_bottom-l.body,'Hide keyboard or rotate')end
+  end
+end
+
 function M.draw(ctx,g)
   if not A then return end
   if A.sync and A.sync.active then A.sync:draw(ctx,g);return end
@@ -1657,23 +1878,10 @@ function M.draw(ctx,g)
   local focused=A.focus_mode and A.view=="editor"
   if A.view~="editor" then editor_chrome(ctx,g,l) end
   if A.view=="editor" then
-    local p=A.editor.prepared
-    A.editor.touch_rows=p.rows;A.editor.touch_revision=p.revision;A.editor.touch_font=f;A.editor.touch_doc=p.doc;A.editor.touch_geometry=l.key
-    if p.size==0 then box(g,ui,l.x,l.body+56,l.w,100,"A little space to write.\nConnect your Bluetooth keyboard.") end
-    for i,r in ipairs(p.rows) do
-      local y=l.body+(i-1)*l.step
-      local s=p.selection[i]
-      if s then
-        g:rect(l.x+s.x,y,s.w,f.line_height,{color=15,fill=true})
-        g:text(l.x,y,r.text,{font=f,color=15})
-        g:text(l.x+s.x,y,s.text,{font=f,color=0})
-      else g:text(l.x,y,r.text,{font=f}) end
-    end
-    if p.caret then
-      local x=l.x+p.caret.x;local y=l.body+(p.caret.row-1)*l.step
-      g:line(x,y,x,y+f.line_height,{line_width=2})
-    end
-    position_line(ctx,g,l,p)
+    if A.workspace.split then
+      A.presented_split_key=l.split_key
+      for slot=1,2 do local editor=A.workspace.sessions[slot];draw_editor(ctx,g,geometry(ctx,editor,slot),editor,slot==A.workspace.active)end
+    else draw_editor(ctx,g,l,A.editor,true)end
     editor_chrome(ctx,g,l)
   elseif A.view=="statistics" then
     local small=A.ui_small;local mode=A.stats_mode or 1
@@ -1715,7 +1923,7 @@ function M.draw(ctx,g)
       g:text_box(c.x+3,c.y+2,c.w-9,c.h-4,c.label,{font=small,align="center",valign="middle",overflow="ellipsis",color=c.selected and 0 or 15})
     end
     pager(g,small,l,1,1)
-  elseif A.view=="menu" or A.view=="library" or A.view=="fonts" or A.view=="layouts" then
+  elseif A.view=="split" or A.view=="menu" or A.view=="library" or A.view=="fonts" or A.view=="layouts" then
     local rows=list_rows()
     local per=l.per; local first=((A.focus-1)//per)*per+1
     if #rows==0 then box(g,ui,l.x,l.body,l.w,120,"No Markdown or text files yet.\nEscape returns to writing.") end
@@ -1738,6 +1946,7 @@ function M.draw(ctx,g)
         g:rect(l.x,y+10,22,22,{radius=2})
         if checked then g:line(l.x+4,y+21,l.x+9,y+27);g:line(l.x+9,y+27,l.x+19,y+14) end
         box(g,A.ui_small,l.x+34,y+4,l.w-34,36,label)
+      elseif A.view=='split'then box(g,A.ui_small,l.x,y+4,l.w,l.row-8,label)
       else box(g,A.ui_small,l.x,y+4,l.w,36,label) end
     end
     pager(g,ui,l,((A.focus-1)//per)+1,math.max(1,(#rows+per-1)//per))
@@ -1774,10 +1983,11 @@ function M.draw(ctx,g)
     help_view(ctx,g,ui,l)
   end
   if l.footer then
-  g:line(l.x,l.foot,l.right,l.foot)
+  local notice=l.workspace_notice or {x=l.x,y=l.foot,w=l.w}
+  g:line(notice.x,notice.y,notice.x+notice.w,notice.y)
   local status=A.blocked and "Protected" or A.editor.save_failed and "SAVE FAILED" or A.editor.dirty and "Unsaved" or "Saved"
-  box(g,ui,l.x,l.foot+8,l.w,30,status.." | "..A.editor.buffer.words..(A.editor.buffer.words==1 and " word" or " words").." | "..tostring(A.editor.buffer.size).." B"..(A.editor.browsing and " | Browse" or "")..(A.caps and " CAPS" or ""))
-  if A.message then box(g,ui,l.x,l.foot+40,l.w,54,A.message) end
+  box(g,ui,notice.x,notice.y+8,notice.w,30,status.." | "..A.editor.buffer.words..(A.editor.buffer.words==1 and " word" or " words").." | "..tostring(A.editor.buffer.size).." B"..(A.editor.browsing and " | Browse" or "")..(A.caps and " CAPS" or ""))
+  if A.message then box(g,ui,notice.x,notice.y+40,notice.w,54,A.message) end
   end
   if A.virtual and A.view=="editor" and not A.close_modal then
     local keys,top=virtual_keys(ctx);local small=A.ui_small
@@ -1806,8 +2016,8 @@ function M.draw(ctx,g)
     local r=close_rect(ctx);local modal=A.close_modal;local small=A.ui_small
     g:rect(r.x,r.y,r.w,r.h,{fill=true,color=0,radius=8});g:rect(r.x,r.y,r.w,r.h,{radius=8,line_width=2})
     g:text(r.x+r.w//2,r.y+28,"Close inkWrite?",{font=ui,align="center",valign="middle"})
-    g:text_box(r.x+12,r.y+58,r.w-24,56,modal.dirty and "Save changes before closing?" or A.blocked and "Files are unchanged." or "No unsaved changes.",{font=small,align="center",wrap="word",overflow="ellipsis"})
-    local labels=modal.dirty and {"Cancel","Save","Discard"} or {"Cancel","Close"};local w=r.w//#labels
+    g:text_box(r.x+12,r.y+58,r.w-24,56,modal.dirty and (A.workspace.slotted and 'Save all open documents before closing?'or 'Save changes before closing?')or A.blocked and 'Files are unchanged.'or 'No unsaved changes.',{font=small,align="center",wrap="word",overflow="ellipsis"})
+    local labels=modal.dirty and (A.workspace.slotted and {'Cancel','Save all','Discard all'}or {'Cancel','Save','Discard'})or {'Cancel','Close'};local w=r.w//#labels
     for i,label in ipairs(labels) do
       g:rect(r.x+(i-1)*w+6,r.y+126,w-12,52,{fill=modal.choice==i,radius=4})
       g:text(r.x+(i-1)*w+w//2,r.y+152,label,{font=small,align="center",valign="middle",color=modal.choice==i and 0 or 15})

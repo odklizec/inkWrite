@@ -1,5 +1,14 @@
 # inkWrite
 
+This test branch includes **split screen**: Settings > More > Split screen or
+**Ctrl+Shift+P**. Choose top/bottom or left/right and 1:1, 2:1 or 1:2. Both panes
+remain visible in focus mode. **Ctrl+Tab**, Classic Left/Right, or a Pro header
+tap changes the active pane; New/Open/Save target it. Save all / Discard all on
+exit include hidden documents. See the [implementation and device acceptance
+plan](docs/SPLIT-SCREEN-PLAN.md). Desktop checks and native Pro/Classic simulator
+checks pass; physical-device acceptance remains pending. This branch is not a
+Store release.
+
 For Studio imports use the corrected exporter described in
 [Studio project layout](docs/STUDIO-PROJECT-LAYOUT.md). Desktop tests and the
 separate diagnostic are stored there as text references, avoiding mixed app roots.

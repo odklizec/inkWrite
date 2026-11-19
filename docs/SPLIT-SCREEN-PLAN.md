@@ -1,4 +1,4 @@
-# Split screen: reviewed plan and first implementation milestone
+# Split screen: implementation and acceptance plan
 
 Reviewed 19 November 2026 against main `2dc835e10c381ef07bc0c998323949240bdc698c`.
 Manifest 1.0.22 / API 2.26; runtime menu constant remains 1.0.20, matching the
@@ -46,16 +46,17 @@ superseded. Baseline: 30 suites / 16,177 assertions pass locally.
 
 ## Ownership and persistence
 
-`A.editor` now owns document/view state. `domain/editor_session.lua` owns session
-construction, change tracking, selection, save, checkpoint and saved snapshots.
-The controller still has exactly one active session in this milestone.
+`A.editor` references the active session inside `A.workspace.sessions` (at most
+two). `domain/editor_session.lua` owns construction, change tracking, selection,
+save, checkpoint and saved snapshots. Both sessions retain their own undo/view
+state; global keyboard, clipboard, typography and statistics remain shared.
 
 `domain/workspace.lua` supplies a bounded two-slot model, duplicate detection,
-reserved filenames and activation guarded by outgoing recovery. It is not yet
-connected to the writing-screen UI. `domain/pane_geometry.lua` supplies pure
-rectangle division, text capacity and hit testing for the renderer to share.
+reserved filenames, guarded activation, validated workspace persistence and
+two-session startup/recovery. `domain/pane_geometry.lua` supplies rectangle
+division, text capacity and hit testing shared by the renderer and input routes.
 
-The released single-pane writer continues to use `recovery.txt` unchanged.
+Before the first split, the writer continues to use `recovery.txt` unchanged.
 Documents accepts explicit slots 1/2 (`recovery-a.txt`, `recovery-b.txt`) and two
 reserved filenames. Invalid recovery slot values fail before IO. Save removes
 only the selected recovery slot; conflict-copy allocation also reserves loaded
@@ -64,8 +65,10 @@ identity and buffer revision, so rename does not retain an obsolete filename.
 
 Legacy migration is implemented as an explicit, tested copy/read-verify/remove
 operation. It preserves conflicting/corrupt records and keeps the old record on
-write, verification or cleanup failure. It is intentionally not called by the
-single-pane startup: activation waits until startup can recover both slots.
+write, verification or cleanup failure. The first split enables slot storage;
+startup discovers either slot even if the workspace preference write failed.
+Matching clean outgoing recovery is removed before a pane loads a different
+file. Unrelated or differing recovery blocks replacement and remains intact.
 
 On pane switch, checkpoint outgoing dirty text before activation. A failed write
 keeps the current pane active. This keeps at most one edited session newer than
@@ -75,15 +78,15 @@ Text/undo/caches never enter ctx.state. Persist only a versioned, validated smal
 workspace manifest containing layout, active pane and per-pane cursor/path.
 Recovery records remain discoverable even if workspace metadata was not saved.
 
-## Additional integration required by the new sync features
+## Integrated sync safeguards
 
-1. Automatic upload must check the loaded session matching the queued filename,
-   including an inactive or hidden dirty session. Checking only the active
-   session's dirty flag is insufficient. Preserve per-profile queue ownership,
-   retries, cancellation and saved-disk fingerprint checks.
-2. Conflict review of a named file must resolve to its loaded session before
-   taking the existing non-active-disk path. It must never replace SD content
-   while an inactive pane has a dirty buffer for that file.
+1. Automatic uploads conservatively wait while either loaded session is dirty
+   or has a save failure, including hidden sessions. Existing profile ownership,
+   retries, cancellation and saved-disk fingerprint checks remain in use.
+2. Named conflict review resolves to its loaded session before taking the
+   non-active-disk path. A confirmed update can replace clean inactive B while
+   leaving dirty active A, A's identity and A's recovery unchanged. A new edit
+   or replacement session invalidates the captured review.
 3. Snapshot/apply hooks capture pane/session/document identity, revision, exact
    bytes and filename. Delayed callbacks cannot retarget after activation or
    document replacement. Retain modal ownership during manual sync/setup.
@@ -93,6 +96,33 @@ Recovery records remain discoverable even if workspace metadata was not saved.
 5. The GitHub badge and shared word count identify the active document; held
    uploads elsewhere remain discoverable without mislabelling the active pane.
 
+## Usage
+
+Open Settings > More > Split screen, or press Ctrl+Shift+P. Choose Horizontal
+(top/bottom), Vertical (left/right), or a ratio. A stays first; selecting B does
+not reverse 2:1 or 1:2. Direction/ratio selection returns to writing. Current
+choices show an asterisk in the settings page.
+
+Ctrl+Tab switches panes. Classic Left/Right select A/B when no toolbar or other
+overlay owns input. In focus, Classic OK opens the Split page, whose last row
+toggles focus. Pro can tap a header to activate without moving its caret, tap
+text to activate/place the caret, or hold a header to open Split settings.
+Cross-divider swipes do not retarget selection/navigation. Existing outer-edge
+gestures retain priority.
+
+The filled header and > marker identify the active pane. Prefix * means unsaved;
+! means Save failed. New/Open/Save and journal shortcuts target the active pane;
+the Save label and file browser identify A/B. Opening an already loaded file
+selects its owning pane. Rename/delete of another open pane's file is refused;
+activate that pane first. Save all / Discard all in the exit card affect both
+dirty documents, even when one is hidden by Single pane.
+
+Single pane expands the active session and retains the other in memory. Idle
+autosave visits both sessions fairly, one write per tick; failure stops retrying
+that session until another edit or an explicit Save. A failed Save prevents
+New/Open replacement and prevents Save all from quitting. Shared notices draw
+below the whole split, not over the other pane's filename strip.
+
 ## Milestones and gates
 
 1. **Implemented here:** explicit editor-session extraction in the real writer;
@@ -100,15 +130,13 @@ Recovery records remain discoverable even if workspace metadata was not saved.
    activation; ratio/text/hit geometry; controller and failure regression tests.
    Existing controller tests retain their behavioral assertions, with private
    state paths updated to A.editor. Runtime allowlist includes the new modules.
-2. Wire two-session startup/recovery, small workspace persistence, active-pane
-   file operations, autosave of both sessions and save/discard/exit semantics.
-   Audit every legacy recovery access before enabling slot migration. No split
-   UI is exposed before this and the sync ownership work pass.
-3. Bind auto/manual sync, named conflict review and library management to both
-   sessions. Tests must prove dirty inactive text cannot be overwritten or sent.
-4. Render both prepared views and expose split controls, headers, Classic/Pro
-   activation and focus access. Cache the inactive pane; no wrapping in draw.
-5. Verify 48 base combinations (two models x two rotations x two directions x
+2. **Implemented:** two-session startup/recovery, workspace persistence, active
+   file operations, both-session autosave and Save all / Discard all exit.
+3. **Implemented:** auto/manual sync ownership, named review and library guards.
+   Actual App/Auth/Session integration tests cover inactive B and stale reviews.
+4. **Implemented:** both prepared views, presets, headers, keyboard/Classic/Pro
+   input routes and focus access. Typing reuses the inactive prepared frame.
+5. **Device acceptance pending:** verify 48 base combinations (two models x two rotations x two directions x
    three ratios x normal/focus), plus keyboard-visible, large/fallback fonts,
    SD failures, stale callbacks, missing files, legacy recovery, maximum text,
    suspend and restart. Geometry tests cover 96 combinations including keyboard
@@ -121,14 +149,32 @@ the runtime cannot extend on_leave's callback budget.
 
 ## Delivery scope
 
-This is a foundation test branch, not a split-screen release. The writing screen
-remains single-pane; no schema migration runs automatically, no main merge,
-original-cloud overwrite or Store publication is included. Native preview and
-hardware evidence must be reported separately from the desktop suite.
+This is a functional split-screen test branch, not a Store release. The first
+deliberate split enables the new storage layout. No main merge, original-cloud
+overwrite or Store publication is included. Before physical acceptance, use
+copies of documents: older single-pane builds do not load the new recovery
+slots. Native preview and hardware evidence are separate from desktop tests.
 
-Validation: 32/32 desktop suites pass, 19,320 assertions. The new session suite
-has 59 checks; the geometry suite has 3,084 checks across 96 configurations.
+Validation: 33/33 desktop suites pass, 19,532 assertions. Session foundation:
+59 checks; geometry: 3,084 checks across 96 configurations; real writer split
+integration: 194 checks; App/GitHub workflow: 62 checks including inactive-pane
+identity/revision guards, protected A recovery and blocked automatic uploads.
 Static packaging verifies all 25 runtime Lua modules, their require closure,
 network ownership and both existing XIC assets. A separate preview app identity
-was staged, but the official preview URL redirected to the developer/sign-in
-page; native rendering and physical-device acceptance were not performed.
+was staged as `inkwrite.split-screen-preview`. After the owner connected the
+official preview, native Pro touch verified separate Alpha/Bravo documents,
+horizontal 1:1, vertical 2:1 and 1:2, portrait/landscape, normal/focus, header
+activation/settings, the virtual keyboard and Save B. Independent app-file
+reads confirmed Alpha stayed exactly 148 bytes while Bravo became 155 bytes
+after appending q. Native Classic restart, Left/Right pane activation, OK focus
+settings and Back all reported supported/handled with null faults. Final Pro
+restart preserved focus, ratio, orientation, both files and active pane. Final
+Pro and Classic diagnostics were empty. Screenshots are delivery artifacts.
+
+Preview project: `f1ec8532-6e59-448c-aa1c-751b802089d1`; final runtime-source
+revision: `b7dca52c987916f7b50fa9762b880617a3e5fbdfc47f4d7f4c596d5e5e46e29f`.
+This is an isolated plugin preview, not a save of the original cloud project.
+Real GitHub transfers, real Bluetooth keyboards, physical panel latency/memory
+and SD interruption/power-loss acceptance remain pending. Manifest stays 1.0.22 /
+API 2.26 and the pre-existing menu version stays 1.0.20; release numbering was
+not advanced.
