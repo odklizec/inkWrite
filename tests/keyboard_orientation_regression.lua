@@ -28,11 +28,11 @@ check(A.keyboard.id=='us' and #A.enabled_ids==1,'English default')
 -- Open settings with device routes and enter its Keyboard page.
 key('Escape');check(A.view=='menu','menu');key('Escape')
 A.panel='settings';A.action_focus=8;key('Enter');check(A.view=='layouts','separate page')
-local before=A.buffer:text();local caret=A.buffer.pos;A.anchor=0
+local before=A.editor.buffer:text();local caret=A.editor.buffer.pos;A.editor.anchor=0
 local function index(id)for i,v in ipairs(Keyboard.ids)do if id==v then return i end end end
 A.focus=index('ro')+1;key('Enter');check(ctx.state.keyboard_enabled.ro and A.view=='layouts','checkbox stays in settings')
 A.focus=index('ru')+1;key('Enter');check(#A.enabled_ids==3,'multi select')
-check(A.buffer:text()==before and A.buffer.pos==caret and A.anchor==0,'selection retained')
+check(A.editor.buffer:text()==before and A.editor.buffer.pos==caret and A.editor.anchor==0,'selection retained')
 A.focus=index('us')+1;key('Enter');check(A.keyboard.id~='us' and #A.enabled_ids==2,'active removed selects enabled')
 A.focus=index('ro')+1;key('Enter');A.focus=index('ru')+1;key('Enter');check(#A.enabled_ids==1,'last selected cannot be removed')
 check(A.message=='Keep at least one keyboard selected','last language notice')
@@ -51,17 +51,17 @@ for _,size in ipairs({{480,800},{800,480}})do
  check(not find('Romanian (Standard)'),'unselected absent in popup')
  check(find('English (US)') and find('Russian'),'enabled popup entries')
 end
-A.languages=nil;A.anchor=nil
+A.languages=nil;A.editor.anchor=nil
 local calls=0
 ctx.screen.orientation='portrait'
 ctx.screen.set_orientation=function(_,target)calls=calls+1;ctx.pending=target;if ctx.rotation_fail then return nil,'busy' end;return true end
 key('KeyS',nil,{ctrl=true,shift=true});check(ctx.pending=='landscape' and ctx.state.screen_orientation=='landscape','orientation request saved')
 check(ctx.screen.orientation=='portrait','rotation asynchronous')
 ctx.screen.orientation='landscape';ctx.screen.width=800;ctx.screen.height=480;App.tick(ctx);draw()
-check(A.touch_geometry==A.prepared.key,'rotated snapshot coherent')
+check(A.editor.touch_geometry==A.editor.prepared.key,'rotated snapshot coherent')
 local saved=ctx.state.screen_orientation;ctx.rotation_fail=true
 key('KeyS',nil,{ctrl=true,shift=true});check(ctx.state.screen_orientation==saved and A.message:find('busy'),'failed rotation retains saved choice')
-check(writes==0 and A.buffer:text()==before,'preferences do not write document')
+check(writes==0 and A.editor.buffer:text()==before,'preferences do not write document')
 ctx.rotation_fail=nil;A.panel='settings';A.action_focus=6;key('Enter');check(ctx.pending=='portrait','Screen shelf toggles')
 -- Physical mappings and six valid layers for every new profile.
 for _,id in ipairs({'ro','ru','uk','hu','vi','pl','tr','nl','sv','da','no','fi','el'})do

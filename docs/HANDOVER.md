@@ -1,3 +1,26 @@
+## Split-screen foundation test branch - 2026-11-19
+
+Started from main 2dc835e (manifest 1.0.22, runtime constant 1.0.20) on
+test/split-screen-foundation-2026-11-19. Document/view state now lives in
+A.editor; shared keyboard, typography, clipboard, statistics and GitHub services
+stay on A. Extracted explicit session construction/edit/save/checkpoint/snapshot
+operations. Redraw/navigation timers reject callbacks from replaced sessions.
+Added two independent optional recovery slots, verified opt-in legacy migration,
+two-name reservations, bounded workspace activation and pure pane geometry.
+Single-pane startup still uses legacy recovery; dual startup, visible split UI,
+both-session autosave/exit/library and all-name sync ownership are the next gates.
+See SPLIT-SCREEN-PLAN.md for the revised product plan, new auto-upload/conflict
+review requirements and staged implementation. Do not enable migration or expose
+split controls before those gates. No release numbering, main merge, original
+cloud overwrite or Store publication is part of this foundation milestone.
+
+32/32 desktop suites pass (19,320 assertions). Session/recovery/controller suite:
+59 checks; geometry: 3,084 checks / 96 configurations. Packaging closure validates
+25 executable Lua modules and the existing icons. Isolated native preview was
+attempted but requires Studio sign-in at the returned URL; no native-rendering
+or hardware verification is claimed. Canonical original cloud identity below
+remains authoritative; preview app_id is inkwrite.split-foundation-preview.
+
 ## Canonical original inkWrite project - 2026-11-19
 
 Owner requested consolidating Phase 0 into the original inkWrite and retaining only one inkWrite cloud project. Canonical Studio identity is bc6ebcee-26df-4d19-b814-b9e488605d51, app_id inkwrite, display name inkWrite. The former development project e6d7a10b-8bdc-4f4c-bf77-1f5dfa1e5395 is superseded. Original 1.0.1 project was exported before replacement; preserve its Store cover, asset references, project ID, local chat and listing link. The replacement uses merged main application code and manifest 1.0.21. Exporter now inherits the destination template name, avoiding new Phase 0 copies. Cloud save/round-trip verification and any duplicate cleanup are recorded separately in delivery artifacts. Do not publish to Store automatically. Future updates go to the original inkWrite project and main GitHub branch; preview copies remain temporary.

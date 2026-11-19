@@ -19,17 +19,17 @@ local pub={['2026-11-01-001.md']='keep me',['other.md']='existing writing'}
 local c,a=load(pub,{})
 check(not a.blocked and a.view=='editor','missing last file opens writable editor')
 check(c.state.last==nil and c.state.cursor==nil,'stale preference and cursor cleared')
-check(a.doc.name=='2026-11-01-002.md','fresh name avoids collision')
+check(a.editor.doc.name=='2026-11-01-002.md','fresh name avoids collision')
 check(c.writes==0 and pub['missing.md']==nil,'load neither writes nor resurrects missing file')
 type_text(c,'ž new writing');save(c)
-check(pub[a.doc.name]=='ž new writing','new page saves exact text')
+check(pub[a.editor.doc.name]=='ž new writing','new page saves exact text')
 check(pub['other.md']=='existing writing' and pub['2026-11-01-001.md']=='keep me','other files unchanged')
 check(pub['missing.md']==nil,'save never recreates stale name')
-check(c.state.last==a.doc.name and c.state.cursor==#'ž new writing','save adopts new filename and cursor')
+check(c.state.last==a.editor.doc.name and c.state.cursor==#'ž new writing','save adopts new filename and cursor')
 -- Existing files still load, cursor validation remains bounded.
 c,a=load({['missing.md']='real text'},{})
-check(not a.blocked and a.buffer:text()=='real text','existing last file preserved')
-check(a.buffer.pos==#'real text','out of range cursor ignored')
+check(not a.blocked and a.editor.buffer:text()=='real text','existing last file preserved')
+check(a.editor.buffer.pos==#'real text','out of range cursor ignored')
 -- Only absence is recoverable automatically; actual read failures stay protected.
 for _,err in ipairs({'io_error','out_of_memory','invalid_argument'})do
  c,a=load({},{},function(v)v.size_error=err end)
@@ -48,7 +48,7 @@ c,a=load({}, {},function(v)v.recovery_error='io_error'end)
 check(a.blocked and c.writes==0,'unreadable recovery still protected')
 local priv={['recovery.txt']='INKWRITE1\nmissing.md\nunsaved ž'}
 c,a=load({},priv)
-check(not a.blocked and a.buffer:text()=='unsaved ž' and a.doc.name~='missing.md','valid recovery takes priority over missing last')
+check(not a.blocked and a.editor.buffer:text()=='unsaved ž' and a.editor.doc.name~='missing.md','valid recovery takes priority over missing last')
 check(priv['recovery.txt']=='INKWRITE1\nmissing.md\nunsaved ž','recovery unchanged on load')
 -- If the SD card cannot allocate/check a fresh name, do not expose an unsafe placeholder.
 c,a=load({}, {},function(v)v.size_error='io_error';v.fail_all_sizes=true;local size=v.files.size;v.files.size=function(self,k)if k=='missing.md'then return nil,'not_found'end;return size(self,k)end end)

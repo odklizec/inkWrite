@@ -14,7 +14,8 @@ import zipfile
 RUNTIME = {
     'index.lua', 'keyboard.lua', 'manifest.json',
     'domain/app.lua', 'domain/buffer.lua', 'domain/documents.lua',
-    'domain/layout.lua', 'domain/stats.lua',
+    'domain/layout.lua', 'domain/stats.lua', 'domain/editor_session.lua',
+    'domain/workspace.lua', 'domain/pane_geometry.lua',
     'domain/sync.lua', 'domain/sync_metadata.lua', 'domain/sync_auth.lua',
     'domain/sync_config.lua', 'domain/sync_transport.lua', 'domain/sync_primitives.lua',
     'domain/github_payload.lua', 'domain/sync_session.lua', 'domain/sync_ui.lua',

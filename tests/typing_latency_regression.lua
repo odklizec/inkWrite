@@ -21,13 +21,13 @@ local function draw()drawn={};drawing=true;App.draw(ctx,g);drawing=false;for _,s
 local function key(code,text,mods)App.input(ctx,{type='key',source='keyboard',phase='down',code=code,text=text,mods=mods or {}})end
 local function find(s)for _,v in ipairs(drawn)do if v==s then return true end end end
 -- Controlled times verify the requested deadline, not physical-device speed.
-ctx.time=100;local old=A.prepared;key('KeyX','x');local timer=A.redraw_timer
+ctx.time=100;local old=A.editor.prepared;key('KeyX','x');local timer=A.editor.redraw_timer
 check(timer.due==130,'first key starts a 30 ms cooldown')
-check(A.prepared~=old and A.prepared.revision==A.buffer.revision,'first key prepares immediately without waiting for timer')
-local first=A.prepared
-ctx.time=120;key('KeyY','y');check(A.redraw_timer==timer and timer.due==130,'later key cannot postpone deadline')
-advance(129);check(A.prepared==first,'later key stays batched before deadline')
-advance(130);check(A.prepared.revision==A.buffer.revision,'latest revision prepared at first deadline')
+check(A.editor.prepared~=old and A.editor.prepared.revision==A.editor.buffer.revision,'first key prepares immediately without waiting for timer')
+local first=A.editor.prepared
+ctx.time=120;key('KeyY','y');check(A.editor.redraw_timer==timer and timer.due==130,'later key cannot postpone deadline')
+advance(129);check(A.editor.prepared==first,'later key stays batched before deadline')
+advance(130);check(A.editor.prepared.revision==A.editor.buffer.revision,'latest revision prepared at first deadline')
 check(A.timing.queue.last==10,'queue records actual batched-input wait')
 local text=g.text;g.text=function(...)ctx.time=ctx.time+3;return text(...)end
 local at=ctx.time;draw();local elapsed=ctx.time-at
@@ -36,7 +36,7 @@ check(A.timing.compose.last==10+elapsed,'input-to-composed-frame includes queue 
 local composed=A.timing.compose.last;ctx.time=ctx.time+1000;draw()
 check(A.timing.compose.last==composed,'redrawing same snapshot does not inflate input latency')
 local measure=font.measure;font.measure=function(...)ctx.time=ctx.time+2;return measure(...)end
-key('KeyZ','z');local due=A.redraw_timer.due;advance(due)
+key('KeyZ','z');local due=A.editor.redraw_timer.due;advance(due)
 check(A.timing.layout.last>0,'layout cost measured using active clock')
 local write=ctx.files.write;ctx.files.write=function(...)ctx.time=ctx.time+120;return write(...)end
 key('KeyS',nil,{ctrl=true})
@@ -45,15 +45,15 @@ check(writes==1,'timing instrumentation adds no disk writes')
 check(ctx.state.timing==nil and ctx.state.pending_frame_since==nil,'timing stays transient')
 font.measure=measure;g.text=text;advance(ctx.time+1000);advance(ctx.time+1000)
 local frames=ctx.frames;key('KeyA','a');check(ctx.frames==frames+1,'idle key requests exactly one immediate frame')
-advance(ctx.time+30);check(ctx.frames==frames+1 and A.redraw_timer==nil,'unchanged cooldown adds no frame')
-key('KeyA','a');local pos=A.buffer.pos;key('KeyA',nil,{ctrl=true});check(A.buffer.pos==pos,'select all can change anchor without moving caret')
-advance(ctx.time+30);check(A.prepared.anchor==0,'batched selection-only change publishes')
+advance(ctx.time+30);check(ctx.frames==frames+1 and A.editor.redraw_timer==nil,'unchanged cooldown adds no frame')
+key('KeyA','a');local pos=A.editor.buffer.pos;key('KeyA',nil,{ctrl=true});check(A.editor.buffer.pos==pos,'select all can change anchor without moving caret')
+advance(ctx.time+30);check(A.editor.prepared.anchor==0,'batched selection-only change publishes')
 advance(ctx.time+30)
 ctx.time=0x7ffffffe;key('KeyA','a');check(A.timing.queue.last==0,'idle key has no timer wait')
 ctx.time=0x7fffffff;key('KeyB','b')
-local wrapped=A.redraw_timer;ctx.time=28;wrapped.fn(ctx)
+local wrapped=A.editor.redraw_timer;ctx.time=28;wrapped.fn(ctx)
 check(A.timing.queue.last==29,'batched queue timing handles clock wrap')
-App.pause(ctx);check(A.pending_frame_since==nil and A.redraw_timer==nil,'pause cancels pending measurement')
+App.pause(ctx);check(A.editor.pending_frame_since==nil and A.editor.redraw_timer==nil,'pause cancels pending measurement')
 App.resume(ctx);draw();App.load(ctx)
 check(A.timing~=nil,'old controller reference remains valid')
 local fresh;for i=1,50 do local k,v=debug.getupvalue(App.draw,i);if k=='A'then fresh=v;break end end

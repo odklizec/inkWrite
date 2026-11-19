@@ -7,6 +7,23 @@ local function call(obj,method,...)
   return a,b
 end
 M.call=call
+-- nil preserves the released single-document format. Explicit slots are for
+-- the two workspace sessions; callers cannot select arbitrary private files.
+function M.recovery_key(slot)
+  if slot==nil then return 'recovery.txt' end
+  if slot==1 then return 'recovery-a.txt' end
+  if slot==2 then return 'recovery-b.txt' end
+  return nil,'Invalid recovery slot'
+end
+local function reserved_name(name,reserved)
+  if type(reserved)=='string' then return name:lower()==reserved:lower() end
+  if type(reserved)=='table' then
+    for i=1,2 do
+      if type(reserved[i])=='string' and name:lower()==reserved[i]:lower() then return true end
+    end
+  end
+  return false
+end
 function M.name_ok(n)
   if type(n)~="string" or #n==0 or #n>128 or not utf8.len(n) then return false end
   if n:sub(1,1)=="." or n:sub(-1)=="." or n:sub(-1)==" " then return false end
@@ -33,41 +50,63 @@ function M.fresh_name(ctx,prefix,extension,reserved)
   for i=1,512 do
     local name=prefix..string.format("-%03d",i)..extension
     local n,e=call(ctx.files,"size",name)
-    if n==nil and e=="not_found" and (type(reserved)~='string'or name:lower()~=reserved:lower())then return name end
+    if n==nil and e=="not_found" and not reserved_name(name,reserved)then return name end
     if n==nil and e=="not_found" then e=false end
     if n==nil and e then return nil,e end
   end
   return nil,"No free filename; move older files off the SD card"
 end
-function M.recovery(ctx,name,text)
+function M.recovery(ctx,name,text,slot)
+  local key,e=M.recovery_key(slot);if not key then return nil,e end
   if not M.name_ok(name) or not Buffer.valid(text) or #text>Buffer.MAX then return nil,"Invalid recovery" end
-  return call(ctx.storage,"write","recovery.txt","INKWRITE1\n"..name.."\n"..text)
+  return call(ctx.storage,"write",key,"INKWRITE1\n"..name.."\n"..text)
 end
-function M.load_recovery(ctx)
-  local s,e=call(ctx.storage,"read","recovery.txt")
+function M.load_recovery(ctx,slot)
+  local key,e=M.recovery_key(slot);if not key then return nil,e end
+  local s,e=call(ctx.storage,"read",key)
   if not s then if e=="not_found" then return false end; return nil,e end
+  if type(s)~='string' or #s>Buffer.MAX+140 then return nil,"Unreadable recovery; kept untouched" end
   local name,text=s:match("^INKWRITE1\n([^\n]+)\n(.*)$")
   if not name or not M.name_ok(name) or not Buffer.valid(text) or #text>Buffer.MAX then return nil,"Unreadable recovery; kept untouched" end
   return {name=name,text=text}
 end
-function M.save(ctx,doc,text)
+-- Migration is opt-in until the workspace startup can recover both slots.
+-- Copy/read-verify first; interrupted cleanup leaves two recoverable copies.
+function M.migrate_recovery(ctx,slot)
+  if slot~=1 and slot~=2 then return nil,'Invalid recovery slot' end
+  local legacy,e=M.load_recovery(ctx);if legacy==nil then return nil,e end
+  local target,err=M.load_recovery(ctx,slot);if target==nil then return nil,err end
+  if not legacy then return target end
+  if target and (target.name~=legacy.name or target.text~=legacy.text) then return nil,'Recovery slot already occupied' end
+  if not target then
+    local ok,why=M.recovery(ctx,legacy.name,legacy.text,slot);if not ok then return nil,why end
+    target,err=M.load_recovery(ctx,slot)
+    if not target or target.name~=legacy.name or target.text~=legacy.text then return nil,err or 'Recovery migration verification failed' end
+  end
+  local current,why=M.load_recovery(ctx)
+  if not current or current.name~=legacy.name or current.text~=legacy.text then return nil,why or 'Recovery changed during migration' end
+  local ok,why=call(ctx.storage,'remove','recovery.txt');if not ok then return nil,why end
+  return target
+end
+function M.save(ctx,doc,text,slot,reserved)
+  local key,e=M.recovery_key(slot);if not key then return nil,e end
   -- Recovery is committed first. Never overwrite external changes.
-  local ok,e=M.recovery(ctx,doc.name,text)
+  local ok,e=M.recovery(ctx,doc.name,text,slot)
   if not ok then return nil,"Recovery: "..tostring(e) end
   local current,err=M.read(ctx,doc.name)
   if not current and err~="not_found" then return nil,"Check file: "..tostring(err) end
   if current~=doc.base then
-    local copy,ce=M.fresh_name(ctx,"conflict")
+    local copy,ce=M.fresh_name(ctx,"conflict",nil,reserved)
     if not copy then return nil,ce end
     doc.name=copy; doc.base=nil
-    ok,e=M.recovery(ctx,doc.name,text)
+    ok,e=M.recovery(ctx,doc.name,text,slot)
     if not ok then return nil,"Recovery: "..tostring(e) end
   end
   ok,e=call(ctx.files,"write",doc.name,text)
   if not ok then return nil,"SD save: "..tostring(e) end
   doc.base=text
   -- A stale matching recovery is harmless and removed again on startup.
-  call(ctx.storage,"remove","recovery.txt")
+  call(ctx.storage,"remove",key)
   return true
 end
 -- Remote import never replaces the active document or touches its recovery.
@@ -76,7 +115,7 @@ function M.import_copy(ctx,name,text,reserved)
   local size,err=call(ctx.files,'size',name)
   if size==nil and err~='not_found'then return nil,'import_check_failed'end
   local target=name
-  if size~=nil or (type(reserved)=='string'and name:lower()==reserved:lower())then
+  if size~=nil or reserved_name(name,reserved)then
     target,err=M.fresh_name(ctx,'download',name:lower():sub(-4)=='.txt'and '.txt'or '.md',reserved)
     if not target then return nil,'import_name_failed'end
   end

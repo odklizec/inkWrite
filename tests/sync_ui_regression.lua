@@ -23,7 +23,7 @@ for _,dims in ipairs({{480,800},{800,480}})do
   App.load(c);c.state.github_sync_enabled=false;local a=app_state()
   local function key(code)App.input(c,{type='key',source='keyboard',phase='down',code=code,mods={}})end
   a.view='menu';a.focus=5
-  local buffer,doc=a.buffer,a.doc;a.buffer:seek(3);a.anchor=0;a.top=2;a.focus_mode=true
+  local buffer,doc=a.editor.buffer,a.editor.doc;a.editor.buffer:seek(3);a.editor.anchor=0;a.editor.top=2;a.focus_mode=true
   key('Enter')
   check(a.sync.active and a.sync.focus==1,'More > GitHub opens with Sync selected')
   local labels={};local g=setmetatable({text_box=function(_,x,y,w,h,text,opts)
@@ -35,7 +35,7 @@ for _,dims in ipairs({{480,800},{800,480}})do
   check(labels['Sync this document']~=nil and labels['Back']==nil,'main list starts with Sync, without duplicate Back row')
   check(calls==0,'opening/drawing offline UI does not start networking')
   App.input(c,{type='text',text='unwanted typing'})
-  check(a.buffer==buffer and a.buffer:text()=='Žluťoučký\r\n'and a.doc==doc and a.buffer.pos==3 and a.anchor==0 and a.top==2 and a.focus_mode,'overlay preserves document, selection, cursor, scroll and focus mode')
+  check(a.editor.buffer==buffer and a.editor.buffer:text()=='Žluťoučký\r\n'and a.editor.doc==doc and a.editor.buffer.pos==3 and a.editor.anchor==0 and a.editor.top==2 and a.focus_mode,'overlay preserves document, selection, cursor, scroll and focus mode')
   a.sync.focus=3;App.tick(c);labels={};drawing=true;App.draw(c,g);drawing=false
   local r=labels['GitHub sync: Off']
   App.input(c,{type='pointer',phase='up',gesture='tap',x=r.x+2,y=r.y+2})
@@ -66,7 +66,7 @@ for _,dims in ipairs({{480,800},{800,480}})do
   check(c.state.github_sync_remember==true and calls==0,'only explicit Remember consent enables future persistence; no network is started')
   App.input(c,{type='key',key='back',phase='up'});a.view='editor';c.state.github_sync_remember=false;c.state.github_sync_enabled=false
   App.input(c,{type='key',source='keyboard',code='KeyG',phase='down',mods={ctrl=true}})
-  check(a.sync.active and a.sync.page=='connect'and a.buffer:text()==files['ideas.md']and calls==0,'Ctrl+G opens first-use Sync setup without typing into the document')
+  check(a.sync.active and a.sync.page=='connect'and a.editor.buffer:text()==files['ideas.md']and calls==0,'Ctrl+G opens first-use Sync setup without typing into the document')
 
  end
 end

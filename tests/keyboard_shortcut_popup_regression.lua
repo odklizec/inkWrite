@@ -28,11 +28,11 @@ check(A.keyboard.id=='us' and #A.enabled_ids==1,'English default')
 -- Open settings with device routes and enter its Keyboard page.
 key('Escape');check(A.view=='menu','menu');key('Escape')
 A.panel='settings';A.action_focus=8;key('Enter');check(A.view=='layouts','separate page')
-local before=A.buffer:text();local caret=A.buffer.pos;A.anchor=0
+local before=A.editor.buffer:text();local caret=A.editor.buffer.pos;A.editor.anchor=0
 local function index(id)for i,v in ipairs(Keyboard.ids)do if id==v then return i end end end
 A.focus=index('ro')+1;key('Enter');check(ctx.state.keyboard_enabled.ro and A.view=='layouts','checkbox stays in settings')
 A.focus=index('ru')+1;key('Enter');check(#A.enabled_ids==3,'multi select')
-check(A.buffer:text()==before and A.buffer.pos==caret and A.anchor==0,'selection retained')
+check(A.editor.buffer:text()==before and A.editor.buffer.pos==caret and A.editor.anchor==0,'selection retained')
 A.focus=index('us')+1;key('Enter');check(A.keyboard.id~='us' and #A.enabled_ids==2,'active removed selects enabled')
 A.focus=index('ro')+1;key('Enter');A.focus=index('ru')+1;key('Enter');check(#A.enabled_ids==1,'last selected cannot be removed')
 check(A.message=='Keep at least one keyboard selected','last language notice')
@@ -51,17 +51,17 @@ for _,size in ipairs({{480,800},{800,480}})do
  check(not find('Romanian (Standard)'),'unselected absent in popup')
  check(find('English (US)') and find('Russian'),'enabled popup entries')
 end
-A.languages=nil;A.anchor=nil
+A.languages=nil;A.editor.anchor=nil
 local calls=0
 ctx.screen.orientation='portrait'
 ctx.screen.set_orientation=function(_,target)calls=calls+1;ctx.pending=target;if ctx.rotation_fail then return nil,'busy' end;return true end
 key('KeyS',nil,{ctrl=true,shift=true});check(ctx.pending=='landscape' and ctx.state.screen_orientation=='landscape','orientation request saved')
 check(ctx.screen.orientation=='portrait','rotation asynchronous')
 ctx.screen.orientation='landscape';ctx.screen.width=800;ctx.screen.height=480;App.tick(ctx);draw()
-check(A.touch_geometry==A.prepared.key,'rotated snapshot coherent')
+check(A.editor.touch_geometry==A.editor.prepared.key,'rotated snapshot coherent')
 local saved=ctx.state.screen_orientation;ctx.rotation_fail=true
 key('KeyS',nil,{ctrl=true,shift=true});check(ctx.state.screen_orientation==saved and A.message:find('busy'),'failed rotation retains saved choice')
-check(writes==0 and A.buffer:text()==before,'preferences do not write document')
+check(writes==0 and A.editor.buffer:text()==before,'preferences do not write document')
 ctx.rotation_fail=nil;A.panel='settings';A.action_focus=6;key('Enter');check(ctx.pending=='portrait','Screen shelf toggles')
 -- Physical mappings and six valid layers for every new profile.
 for _,id in ipairs({'ro','ru','uk','hu','vi','pl','tr','nl','sv','da','no','fi','el'})do
@@ -91,12 +91,12 @@ release('AltLeft',{shift=true});release('ShiftRight')
 previous=A.keyboard.id;key('ShiftLeft',nil,{shift=true});check(A.keyboard.id==previous,'plain Shift never switches');release('ShiftLeft')
 key('AltRight',nil,{alt=true});key('ShiftRight',nil,{alt=true,shift=true});check(A.keyboard.id==previous,'AltGr Shift remains protected')
 release('ShiftRight',{alt=true});release('AltRight')
-local saved_text=A.buffer:text();local saved_pos=A.buffer.pos;A.anchor=0
+local saved_text=A.editor.buffer:text();local saved_pos=A.editor.buffer.pos;A.editor.anchor=0
 key('Space',nil,{ctrl=true});check(A.keyboard.id~=previous,'Ctrl Space fallback cycles')
 switched=A.keyboard.id
 App.input(ctx,{type='key',source='keyboard',phase='repeat',code='Space',mods={ctrl=true}})
 check(A.keyboard.id==switched,'Ctrl Space hold never repeats');release('Space',{ctrl=true})
-check(A.buffer:text()==saved_text and A.buffer.pos==saved_pos and A.anchor==0,'switching keeps document and selection')
+check(A.editor.buffer:text()==saved_text and A.editor.buffer.pos==saved_pos and A.editor.anchor==0,'switching keeps document and selection')
 A.close_modal={choice=1,dirty=false};previous=A.keyboard.id;key('Space',nil,{ctrl=true})
 check(A.keyboard.id==previous and A.close_modal~=nil,'modal owns shortcut');key('Escape')
 -- Add more is reachable using keyboard, device keys and touch on every page.
@@ -106,7 +106,7 @@ for _,virtual in ipairs({false,true})do
   A.view='editor';A.languages=true;A.language_focus=#A.enabled_ids+1;App.tick(ctx);draw()
   check(find('Add more...'),'action rendered above virtual keyboard')
   key('Enter');check(A.view=='layouts' and not A.languages,'keyboard Add more opens settings')
-  check(A.buffer:text()==saved_text and A.anchor==0,'settings preserves content and selection')
+  check(A.editor.buffer:text()==saved_text and A.editor.anchor==0,'settings preserves content and selection')
   A.view='editor';A.languages=true;A.language_focus=#A.enabled_ids+1
   local top=70;local bottom=ctx.screen.height-(A.virtual and 264 or 20)
   local per=math.max(1,(bottom-top-48)//48);local first=((A.language_focus-1)//per)*per+1
