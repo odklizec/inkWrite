@@ -55,12 +55,12 @@ A.languages=nil;A.editor.anchor=nil
 local calls=0
 ctx.screen.orientation='portrait'
 ctx.screen.set_orientation=function(_,target)calls=calls+1;ctx.pending=target;if ctx.rotation_fail then return nil,'busy' end;return true end
-key('KeyS',nil,{ctrl=true,shift=true});check(ctx.pending=='landscape' and ctx.state.screen_orientation=='landscape','orientation request saved')
+key('KeyR',nil,{ctrl=true,shift=true});check(ctx.pending=='landscape' and ctx.state.screen_orientation=='landscape','orientation request saved')
 check(ctx.screen.orientation=='portrait','rotation asynchronous')
 ctx.screen.orientation='landscape';ctx.screen.width=800;ctx.screen.height=480;App.tick(ctx);draw()
 check(A.editor.touch_geometry==A.editor.prepared.key,'rotated snapshot coherent')
 local saved=ctx.state.screen_orientation;ctx.rotation_fail=true
-key('KeyS',nil,{ctrl=true,shift=true});check(ctx.state.screen_orientation==saved and A.message:find('busy'),'failed rotation retains saved choice')
+key('KeyR',nil,{ctrl=true,shift=true});check(ctx.state.screen_orientation==saved and A.message:find('busy'),'failed rotation retains saved choice')
 check(writes==0 and A.editor.buffer:text()==before,'preferences do not write document')
 ctx.rotation_fail=nil;A.panel='settings';A.action_focus=6;key('Enter');check(ctx.pending=='portrait','Screen shelf toggles')
 -- Physical mappings and six valid layers for every new profile.

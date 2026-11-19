@@ -1,3 +1,23 @@
+## Split shortcut update - 2026-11-19
+
+Ctrl+Shift+S now cycles single -> 1:1 -> 2:1 -> 1:2 -> single using the
+existing guarded split actions. It keeps the direction, focus mode, active
+pane, both sessions, selection and undo. Only key down advances the cycle;
+repeat/up are consumed. Rotation moved to Ctrl+Shift+R. Ctrl+S and Ctrl+R
+retain Save and full refresh. In-app help, README and the plan are updated.
+
+34/34 desktop suites pass, 19,631 assertions, including 99 new shortcut checks.
+They cover fresh enable, both directions/modes, active B and hidden sessions,
+selection/undo, no incidental public save or rotation, hold/release, overlays,
+failed recovery migration/retry and the unchanged Save/refresh shortcuts.
+The isolated native preview was updated to revision
+`e55e40805752b370200513dcbcfe78d1d72debeeb3fdfe0be39c2524e9db21f7`.
+Pro and Classic restart without diagnostics; Classic Left/Right/OK/Back were
+handled with null faults. Pro is left running. The preview input tools expose
+device controls rather than raw Bluetooth chords, so the new chords themselves
+are covered by desktop tests and still need a physical keyboard check.
+Original cloud app, manifest version and main are unchanged.
+
 ## Functional split-screen test branch - 2026-11-19
 
 Continued test/split-screen-foundation-2026-11-19 with horizontal/vertical panes,

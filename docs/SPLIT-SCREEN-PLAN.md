@@ -36,6 +36,9 @@ superseded. Baseline: 30 suites / 16,177 assertions pass locally.
   workspace holds at most two sessions; no hidden third document is allocated.
 - Pro: pane-header/text touch activation. Classic: Left/Right activation while
   editor input is owned, Up/Down document navigation. Ctrl+Tab switches panes;
+  Ctrl+Shift+S cycles single → 1:1 → 2:1 → 1:2 → single, keeping the selected
+  direction, active pane and both documents in normal/focus mode. Ctrl+Shift+R
+  rotates the screen; Ctrl+R still performs a full refresh.
   Ctrl+Shift+P and Settings > Split screen open layout controls. Focus needs a
   reachable compact actions route on Classic without a touch dependency.
 - Touch gestures belong to their starting pane. Active markers use shapes and
@@ -155,9 +158,10 @@ overwrite or Store publication is included. Before physical acceptance, use
 copies of documents: older single-pane builds do not load the new recovery
 slots. Native preview and hardware evidence are separate from desktop tests.
 
-Validation: 33/33 desktop suites pass, 19,532 assertions. Session foundation:
+Validation: 34/34 desktop suites pass, 19,631 assertions. Session foundation:
 59 checks; geometry: 3,084 checks across 96 configurations; real writer split
-integration: 194 checks; App/GitHub workflow: 62 checks including inactive-pane
+integration: 194 checks; shortcut cycle: 99 checks; App/GitHub workflow: 62 checks
+including inactive-pane
 identity/revision guards, protected A recovery and blocked automatic uploads.
 Static packaging verifies all 25 runtime Lua modules, their require closure,
 network ownership and both existing XIC assets. A separate preview app identity
@@ -171,10 +175,17 @@ settings and Back all reported supported/handled with null faults. Final Pro
 restart preserved focus, ratio, orientation, both files and active pane. Final
 Pro and Classic diagnostics were empty. Screenshots are delivery artifacts.
 
-Preview project: `f1ec8532-6e59-448c-aa1c-751b802089d1`; final runtime-source
+Preview project: `f1ec8532-6e59-448c-aa1c-751b802089d1`; foundation runtime-source
 revision: `b7dca52c987916f7b50fa9762b880617a3e5fbdfc47f4d7f4c596d5e5e46e29f`.
 This is an isolated plugin preview, not a save of the original cloud project.
 Real GitHub transfers, real Bluetooth keyboards, physical panel latency/memory
 and SD interruption/power-loss acceptance remain pending. Manifest stays 1.0.22 /
 API 2.26 and the pre-existing menu version stays 1.0.20; release numbering was
 not advanced.
+
+Shortcut follow-up: Ctrl+Shift+S cycles the existing guarded presets; rotation
+is Ctrl+Shift+R. Native restart smoke checks passed on Classic and Pro for source
+revision `e55e40805752b370200513dcbcfe78d1d72debeeb3fdfe0be39c2524e9db21f7`,
+with empty diagnostics. Classic device controls were handled without faults.
+Raw Bluetooth shortcut delivery remains a physical-device check; simulator
+input tools do not expose those chords.

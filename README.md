@@ -69,7 +69,7 @@ Settings → Type shows the actual font in use and offers size, line spacing and
 
 Choose your font in **Ink App → Settings → Font**, then close and reopen inkWrite. Place `.ttf` files in the SD card fonts folder if needed. inkWrite requests the chosen font for writing and controls using the current host API; the actual returned font name appears in Typography. The size choices are 20/24/28/30/32/36 px. If the host cannot use the selected file, it may return the reader font or a built-in fallback; the latter is shown as **System fallback**. Glyph coverage depends on the font. The host owns font memory and caching; inkWrite uses six size choices and opens sizes outside drawing.
 
-**Settings → Screen** or **Ctrl+Shift+S** toggles portrait and landscape. The choice is remembered for the next open; it applies only to inkWrite and does not change device settings.
+**Settings → Screen** or **Ctrl+Shift+R** toggles portrait and landscape. The choice is remembered for the next open; it applies only to inkWrite and does not change device settings.
 
 ## Files, saving and recovery
 
@@ -110,7 +110,8 @@ Optional manual GitHub transfers are available through Settings → More → Git
 | Ctrl+Left / Right | Move by word |
 | PageUp / PageDown | Move by page |
 | Ctrl+Shift+F | Toggle focus |
-| Ctrl+Shift+S | Rotate screen |
+| Ctrl+Shift+S | Cycle split: 1:1 → 2:1 → 1:2 → single pane |
+| Ctrl+Shift+R | Rotate screen |
 | Left Alt+Shift / Ctrl+Space | Next selected keyboard |
 | Ctrl+R | Full refresh |
 | Escape | More menu / return to writing |
