@@ -1,3 +1,17 @@
+## Auto default and menu order - 2026-11-19
+
+Auto: follow screen is now directly under Back to writing (row 2). Fixed
+directions follow it; ratio, switch, single, focus and keyboard-cycle routing
+have been updated for the new order. New workspaces and older preferences
+without a saved direction_auto flag default to Auto. Explicit false/manual
+choices still persist. This supersedes the earlier legacy-default policy.
+35/35 desktop suites pass, 19,758 assertions; rotation/Auto suite: 127 checks,
+including visible menu order/default marker and selecting the second row.
+Native Pro preview shows Auto marked directly below Back to writing; no
+runtime errors or diagnostics. Preview source revision:
+8bd8ef37d0c7b033f99169a170e4d6bd7aac3667fe087d13e7dfc5922f011aae.
+Manifest version, main and the original cloud project remain unchanged.
+
 ## Automatic split direction - 2026-11-19
 
 New workspaces default to Auto: follow screen: portrait -> top/bottom,

@@ -25,8 +25,9 @@ superseded. Baseline: 30 suites / 16,177 assertions pass locally.
   1:2 always describe A:B and never reverse when activation changes.
   New workspaces use Auto: follow screen: portrait top/bottom, landscape
   left/right. Choosing a fixed direction overrides Auto through later rotations
-  and reopenings. The Auto menu row restores following the screen. Existing
-  saved directions from earlier builds remain fixed choices.
+  and reopenings. The Auto menu row restores following the screen. Auto is the
+  first setting below Back to writing. Older settings without an explicit Auto/
+  manual flag default to Auto; explicitly saved manual choices remain fixed.
 - Normal and focus modes show both documents at the selected ratio. Focus hides
   normal chrome, retaining compact filename/dirty/error indicators and an active
   badge. Screen rotation preserves session identities and positions.
@@ -162,9 +163,9 @@ overwrite or Store publication is included. Before physical acceptance, use
 copies of documents: older single-pane builds do not load the new recovery
 slots. Native preview and hardware evidence are separate from desktop tests.
 
-Validation: 35/35 desktop suites pass, 19,755 assertions. Session foundation:
+Validation: 35/35 desktop suites pass, 19,758 assertions. Session foundation:
 59 checks; geometry: 3,084 checks across 96 configurations; real writer split
-integration: 194 checks; shortcut cycle: 99 checks; rotation/Auto: 124 checks;
+integration: 194 checks; shortcut cycle: 99 checks; rotation/Auto: 127 checks;
 App/GitHub workflow: 62 checks
 including inactive-pane
 identity/revision guards, protected A recovery and blocked automatic uploads.
@@ -197,11 +198,11 @@ input tools do not expose those chords.
 
 Automatic direction follow-up: `direction_auto` is a validated optional boolean
 in workspace schema 1. New workspaces default to true; older saved workspaces
-without it retain their fixed direction. Geometry derives the effective
+without it default to Auto. Geometry derives the effective
 orientation from the current screen dimensions without changing document state
 or doing layout during drawing. Ratio changes do not turn Auto off. Rotation
 schedules frame preparation outside drawing after the host publishes its size.
-35 suites pass with 124 new rotation/Auto assertions, including asynchronous
+35 suites pass with 127 rotation/Auto assertions, including asynchronous
 rotation, both launch shapes/modes, fixed overrides, restore, invalid settings,
 recovery failures and both sessions' text/selection/undo. The shared test host
 now correctly avoids swapping dimensions for an already-applied orientation.
@@ -215,3 +216,8 @@ idle timer delivery/immediate redraw after rotation remains a hardware check.
 There were no runtime errors. Studio raised a refresh-full-input warning after
 four screen rotations; the contract schedules full refresh for orientation
 changes. No new explicit full-refresh request is added here.
+
+Menu/default follow-up: Auto: follow screen is row 2, directly below Back to
+writing, before Horizontal and Vertical. Ratio/switch/single/focus actions and
+Ctrl+Shift+S use the reordered rows. A missing direction_auto flag now means
+Auto; false remains an explicit manual choice and survives reopening.

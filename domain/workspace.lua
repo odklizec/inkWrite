@@ -94,8 +94,8 @@ function M.restore(ctx,time)
   local w=M.new();w.slotted=true
   if v then
     w.active=v.active;w.split=v.split;w.direction=v.direction;w.ratio=v.ratio
-    -- Earlier builds stored only a direction. Keep that choice fixed.
-    w.direction_auto=v.direction_auto==true
+    -- Auto is also the default for older settings without a saved policy.
+    w.direction_auto=v.direction_auto~=false
   end
   local names={}
   for i=1,2 do names[i]=recs[i]and recs[i].name or v and v.sessions[i]and v.sessions[i].name end

@@ -613,10 +613,10 @@ end
 local function list_rows()
   if A.view=='split'then
     local w=A.workspace
-    return {'Back to writing','Horizontal: top / bottom'..(w.split and not w.direction_auto and w.direction=='horizontal'and ' *'or ''),'Vertical: left / right'..(w.split and not w.direction_auto and w.direction=='vertical'and ' *'or ''),
+    return {'Back to writing','Auto: follow screen'..(w.direction_auto and ' *'or ''),
+      'Horizontal: top / bottom'..(w.split and not w.direction_auto and w.direction=='horizontal'and ' *'or ''),'Vertical: left / right'..(w.split and not w.direction_auto and w.direction=='vertical'and ' *'or ''),
       'Ratio 1:1'..(w.ratio=='1:1'and ' *'or ''),'Ratio 2:1'..(w.ratio=='2:1'and ' *'or ''),
-      'Ratio 1:2'..(w.ratio=='1:2'and ' *'or ''),'Switch active pane','Single pane',A.focus_mode and 'Exit focus mode'or 'Enter focus mode',
-      'Auto: follow screen'..(w.direction_auto and ' *'or '')}
+      'Ratio 1:2'..(w.ratio=='1:2'and ' *'or ''),'Switch active pane','Single pane',A.focus_mode and 'Exit focus mode'or 'Enter focus mode'}
   end
   if A.view=="menu" then return {commands[6],commands[7],commands[8],"Statistics","GitHub sync","Split screen"} end
   if A.view=="layouts" then
@@ -754,20 +754,20 @@ split_menu=function(ctx)
 end
 split_action=function(ctx,i)
   if i==1 then A.view='editor';ctx:invalidate();return end
-  if i==9 then command(ctx,11);return end
+  if i==10 then command(ctx,11);return end
   if A.blocked then message(ctx,'Recovery needs attention; split settings are protected');return end
   local w=A.workspace
-  if i>=2 and i<=6 or i==10 then
+  if i>=2 and i<=7 then
     extend_budget(ctx)
     local ok,e=Workspace.enable(ctx,w,now(ctx))
     if not ok then message(ctx,'Split screen: '..tostring(e));return end
     A.editor=w.sessions[w.active]
-    if i==10 then w.direction_auto=true
-    elseif i==2 or i==3 then w.direction=i==2 and 'horizontal'or 'vertical';w.direction_auto=false
-    else w.ratio=({'1:1','2:1','1:2'})[i-3]end
-  elseif i==7 then
+    if i==2 then w.direction_auto=true
+    elseif i==3 or i==4 then w.direction=i==3 and 'horizontal'or 'vertical';w.direction_auto=false
+    else w.ratio=({'1:1','2:1','1:2'})[i-4]end
+  elseif i==8 then
     if not w.slotted or not switch_pane(ctx,w.active%2+1)then return end
-  elseif i==8 then w.split=false
+  elseif i==9 then w.split=false
   else return end
   cancel_navigation();cancel_redraw();A.view='editor'
   persist_workspace(ctx);prepare_frame(ctx);ctx:invalidate()
@@ -1004,7 +1004,7 @@ local function keyboard(ctx,ev)
   if A.view=='editor'and shortcut and mods.shift and code=='KeyS'then
     if down then
       local w=A.workspace
-      split_action(ctx,not w.split and 4 or w.ratio=='1:1'and 5 or w.ratio=='2:1'and 6 or 8)
+      split_action(ctx,not w.split and 5 or w.ratio=='1:1'and 6 or w.ratio=='2:1'and 7 or 9)
     end
     return true
   end
