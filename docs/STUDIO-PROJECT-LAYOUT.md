@@ -1,3 +1,5 @@
+Canonical project is now the original **inkWrite**, ID bc6ebcee-26df-4d19-b814-b9e488605d51. Phase 0 is superseded. The exporter inherits the template project name and preserves its cover/assets and identity. Historical development details below are retained as history.
+
 Build 1.0.20 adds domain/sync_setup.lua and domain/sync_setup_ui.lua: **twenty-two** executable Lua files. Public setup and private per-profile runtime records are separate; no device state or credentials are packaged.
 
 Build 1.0.9 adds domain/approval_qr.lua to the shipping allowlist: **eighteen** executable Lua files. The QR is generated public-URL drawing data, with no credentials and no runtime QR library. scripts/build_approval_qr.py is a non-executable development reference.

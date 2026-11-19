@@ -37,7 +37,9 @@ def build(repo, template, archive, stage):
             names.append(name)
     contents = {cloud_path(n): (repo / n).read_bytes() for n in names}
     manifest = json.loads(contents['manifest.json'])
-    manifest['display_name'] = 'inkWrite GitHub Sync Phase 0'
+    with zipfile.ZipFile(template) as original:
+        template_project = json.loads(original.read('xtapp-studio/project.json'))['project']
+    manifest['display_name'] = template_project['name']
     contents['manifest.json'] = (json.dumps(manifest, indent=2) + '\n').encode()
     layout = {cloud_path(n): n for n in names if cloud_path(n) != n}
     contents['docs/DEVELOPMENT-SOURCE-MAP.json'] = (json.dumps(layout, indent=2) + '\n').encode()
