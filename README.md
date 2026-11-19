@@ -24,6 +24,8 @@ A quiet writing and journaling app for Xteink X4Pro and X4Classic. Requires comp
 
 ## GitHub setup
 
+Start with the [illustrated beginner’s guide to connecting inkWrite to GitHub](docs/GITHUB-SETUP-GUIDE.md).
+
 Open **Settings > More > GitHub sync > GitHub setup / change repository**. New installs open setup automatically. Enter your own GitHub App's public Client ID, numeric App ID and GitHub login, approve the device code (or scan its QR), then choose a private repository and branch. Save the verified destination. No secrets or source edits are needed. Existing owner setup is retained.
 
 Each saved destination keeps separate sync records, pending uploads and remembered credentials. Switching leaves automatic uploads Off and asks for Remember consent again. Four additional setups plus the existing owner setup can be retained. [Setup instructions and device checks](docs/GITHUB-GENERAL-SETUP-1.0.20.md).
