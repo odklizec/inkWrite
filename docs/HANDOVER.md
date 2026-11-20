@@ -1,3 +1,7 @@
+## Menu and GitHub review update 1.0.26 - 2026-11-20
+
+InkWrite menu navigation and the split-screen GitHub comparison are saved in the original Studio project. Save and verify future updates in the original InkApp Studio cloud project first. Mirror the verified save to GitHub with a direct fast-forward commit. The owner requested a workflow without pull requests.
+
 ## Final split-screen release 1.0.25 - 2026-11-20
 
 Final manifest, in-app version and current release notes are aligned to 1.0.25.

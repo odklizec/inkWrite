@@ -7,7 +7,7 @@ local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
 local SyncUI=require('domain.sync_ui')
-local M={VERSION="1.0.25"}
+local M={VERSION="1.0.26"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 -- Typing pacing. None of these shorten the panel's own frame time; they keep
