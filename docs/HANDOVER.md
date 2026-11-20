@@ -1,3 +1,21 @@
+## Final split-screen release 1.0.25 - 2026-11-20
+
+Final manifest, in-app version and current release notes are aligned to 1.0.25.
+Studio advanced the patch during an intermediate documentation cloud save;
+1.0.23 notes below describe the initial prepared build. The owner reported
+hardware testing good and authorized merge, original Studio update and GitHub.
+Original identity remains inkwrite / bc6ebcee-26df-4d19-b814-b9e488605d51, with
+icons, cover, listing link and chat history retained. Recovery snapshots and a
+pre-update source backup were kept. Store submission is separate from saving.
+
+35 desktop suites / 19,758 assertions pass. Native release preview passed.
+The Studio exporter now excludes new binary screenshots from text sourceFiles,
+rejects non-UTF-8 source, and preserves existing documentation entries verbatim.
+Real screenshots remain in the repository; the preserved HTML setup guide is
+self-contained. The final source and assets are checked against the cloud export
+and GitHub before delivery; final commit evidence is in the delivery artifact.
+No additional exhaustive power-loss/SD-failure hardware matrix is claimed.
+
 ## Split-screen release 1.0.23 - 2026-11-20
 
 The owner reported hardware testing good and authorized the version update,
