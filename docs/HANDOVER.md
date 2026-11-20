@@ -1,3 +1,22 @@
+## Split-screen release 1.0.23 - 2026-11-20
+
+The owner reported hardware testing good and authorized the version update,
+merge into main, update of the original inkWrite Studio app and GitHub save.
+Manifest and in-app version are aligned to 1.0.23 (API 2.26 unchanged).
+Original app: inkwrite, project bc6ebcee-26df-4d19-b814-b9e488605d51.
+A pre-update backup preserves its source, icons, cover and project identity.
+Original runtime matches main 2dc835e; three cloud-only illustrated setup guide
+files under docs/gtihub_guide are retained in the repository and release.
+The existing workspace/chat is retained rather than reloaded from cloud.
+
+Split implementation and user follow-ups are included: both directions,
+three ratios, normal/focus, two independent documents, active-pane commands,
+recovery/autosave/sync guards, Ctrl+Shift+S ratio cycle, Ctrl+Shift+R rotation,
+and Auto first under Back to writing. Manual direction choices persist.
+35 desktop suites / 19,758 assertions passed before release metadata changes;
+the full suite is rerun for the release. Hardware acceptance is owner-reported;
+no new exhaustive SD/power-loss matrix is claimed. See RELEASE-1.0.23.md.
+
 ## Auto default and menu order - 2026-11-19
 
 Auto: follow screen is now directly under Back to writing (row 2). Fixed
