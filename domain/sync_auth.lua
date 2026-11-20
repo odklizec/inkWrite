@@ -238,9 +238,9 @@ function M.new(config,primitives,discovery)
   end
   function s:setup_repos(ctx,page,done)
     if not discovery or not setup_ready or busy or not int(page,1,10)then return nil,'setup_not_ready'end
-    busy=true;candidates=nil;branches=nil;chosen=nil
+    busy=true
     repo_page(ctx,page,function(c,result,e)
-      busy=false;if not result then failure(e,c)else candidates=result.rows end
+      busy=false;if not result then failure(e,c)else candidates=result.rows;branches=nil;chosen=nil end
       done(c,result,e)
     end);return true
   end
@@ -249,7 +249,7 @@ function M.new(config,primitives,discovery)
     local candidate
     for _,v in ipairs(candidates or {})do if v==record then candidate=v end end
     if not candidate then return nil,'invalid_repository'end
-    chosen=candidate;branches=nil;busy=true
+    busy=true
     get(ctx,'/repos/'..encode(expected_login)..'/'..encode(candidate.full_name:match('/(.+)$'))..'/branches?per_page=10&page='..page,function(c,r)
       busy=false
       if r.err or r.status~=200 then local e=response_error(r);failure(e,c);done(c,nil,e);return end
@@ -259,7 +259,7 @@ function M.new(config,primitives,discovery)
         rows[#rows+1]={name=b.name}
       end end
       if not n then failure('branch_mismatch',c);done(c,nil,'branch_mismatch');return end
-      branches=rows;done(c,{rows=rows,page=page,more=n==10 and page<10})
+      chosen=candidate;branches=rows;done(c,{rows=rows,page=page,more=n==10 and page<10})
     end);return true
   end
   function s:bind_setup(ctx,branch,done)
@@ -285,6 +285,12 @@ function M.new(config,primitives,discovery)
       setup_pending.account_id=account_id;setup_pending.verified_repository_id=repository_id
       saved_record=credentials:record(setup_pending);setup_pending=nil
     end
+    return true
+  end
+  function s:back_to_setup(ctx)
+    if not setup_uncommitted or not valid_token(ctx)then return false end
+    self:cancel_operation()
+    discovery=true;setup_ready=true;verified=false;repository_id=nil;state='setup_ready'
     return true
   end
   local function epoch(ctx)

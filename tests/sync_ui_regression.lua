@@ -22,7 +22,7 @@ for _,dims in ipairs({{480,800},{800,480}})do
   c.after=function()return {cancel=function()end}end
   App.load(c);c.state.github_sync_enabled=false;local a=app_state()
   local function key(code)App.input(c,{type='key',source='keyboard',phase='down',code=code,mods={}})end
-  a.view='menu';a.focus=5
+  a.view='menu';a.focus=4
   local buffer,doc=a.editor.buffer,a.editor.doc;a.editor.buffer:seek(3);a.editor.anchor=0;a.editor.top=2;a.focus_mode=true
   key('Enter')
   check(a.sync.active and a.sync.focus==1,'More > GitHub opens with Sync selected')
@@ -36,12 +36,13 @@ for _,dims in ipairs({{480,800},{800,480}})do
   check(calls==0,'opening/drawing offline UI does not start networking')
   App.input(c,{type='text',text='unwanted typing'})
   check(a.editor.buffer==buffer and a.editor.buffer:text()=='Žluťoučký\r\n'and a.editor.doc==doc and a.editor.buffer.pos==3 and a.editor.anchor==0 and a.editor.top==2 and a.focus_mode,'overlay preserves document, selection, cursor, scroll and focus mode')
-  a.sync.focus=3;App.tick(c);labels={};drawing=true;App.draw(c,g);drawing=false
+  a.sync.focus=6;key('Enter');labels={};drawing=true;App.draw(c,g);drawing=false
   local r=labels['GitHub sync: Off']
   App.input(c,{type='pointer',phase='up',gesture='tap',x=r.x+2,y=r.y+2})
   check(c.state.github_sync_enabled==true,'shared touch row toggles explicit opt-in')
+  key('Escape');check(a.sync.page=='main'and a.sync.focus==6,'Settings Back restores the selected main row')
   App.input(c,{type='key',key='back',phase='up'})
-  check(not a.sync.active and a.view=='menu'and a.focus==5,'Classic Back restores underlying menu')
+  check(not a.sync.active and a.view=='menu'and a.focus==4,'Classic Back restores underlying menu')
   check(files['ideas.md']=='Žluťoučký\r\n'and next(private)==nil and calls==0,'offline navigation preserves local and recovery bytes')
   key('Enter');App.pause(c);App.resume(c)
   check(a.sync.active and not a.sync.session:status(c).connected,'pause clears auth; resume does not reconnect')
@@ -49,22 +50,30 @@ for _,dims in ipairs({{480,800},{800,480}})do
   a.sync.focus=4;a.sync.session.conflict={name='ideas.md',sha=string.rep('a',40)}
   App.tick(c)
   check(a.sync.page=='conflict'and a.sync.focus==1,'new conflict defaults to Cancel')
-  key('Enter');check(a.sync.page=='main'and a.sync.session.conflict==nil,'Cancel leaves originals alone')
+  key('Enter');check(a.sync.page=='main'and a.sync.focus==4 and a.sync.session.conflict==nil,'Cancel restores the previous selection and leaves originals alone')
   App.input(c,{type='key',key='down',phase='down'})
-  check(a.sync.focus==2,'Classic directional navigation')
+  check(a.sync.focus==5,'Classic directional navigation')
   App.input(c,{type='key',key='up',phase='down'})
-  a.sync.focus=3
+  a.sync.focus=6;key('Enter')
   App.input(c,{type='key',key='ok',phase='down'})
   check(c.state.github_sync_enabled==false,'Classic OK activates row once')
   check(calls==0,'no implicit background requests')
-  a.sync.focus=6;key('Enter')
+  a.sync.focus=3;key('Enter')
   check(a.sync.page=='remember'and a.sync.focus==1 and c.state.github_sync_remember~=true,'Remember requires confirmation, default Cancel')
   labels={};drawing=true;App.draw(c,g);drawing=false
   check(labels['Save GitHub login unencrypted on SD.\nAnyone with the card can recover it.']~=nil,'credential-storage risk remains visible in portrait/landscape and tall fonts')
-  key('Enter');check(c.state.github_sync_remember~=true and a.sync.page=='main','Cancel does not enable persistence')
-  a.sync.focus=6;key('Enter');key('ArrowDown');key('Enter')
+  key('Enter');check(c.state.github_sync_remember~=true and a.sync.page=='settings'and a.sync.focus==3,'Cancel returns to Settings without enabling persistence')
+  a.sync.focus=3;key('Enter');key('ArrowDown');key('Enter')
   check(c.state.github_sync_remember==true and calls==0,'only explicit Remember consent enables future persistence; no network is started')
-  App.input(c,{type='key',key='back',phase='up'});a.view='editor';c.state.github_sync_remember=false;c.state.github_sync_enabled=false
+  a.sync.focus=2;key('Enter')
+  check(a.sync.page=='auto','the automatic upload settings are grouped with the opt-in')
+  key('Escape');check(a.sync.page=='settings'and a.sync.focus==2,'automatic uploads returns to Settings')
+  key('Escape');key('ArrowDown');key('Enter')
+  check(a.sync.page=='help','help opens from the main GitHub menu')
+  key('ArrowDown');key('Enter');check(a.sync.page=='revoke','revocation instructions live under Help')
+  key('Escape');check(a.sync.page=='help'and a.sync.focus==2,'Back returns to the help topic list')
+  key('ArrowUp');key('Enter');check(a.sync.page=='setup_help','setup instructions live under Help')
+  key('Escape');key('Escape');key('Escape');a.view='editor';c.state.github_sync_remember=false;c.state.github_sync_enabled=false
   App.input(c,{type='key',source='keyboard',code='KeyG',phase='down',mods={ctrl=true}})
   check(a.sync.active and a.sync.page=='connect'and a.editor.buffer:text()==files['ideas.md']and calls==0,'Ctrl+G opens first-use Sync setup without typing into the document')
 

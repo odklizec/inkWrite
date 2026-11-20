@@ -17,8 +17,8 @@ check(h.public_writes==writes and h.ctx.screen.orientation=='portrait','split ch
 cycle(h,'repeat');cycle(h,'up')
 check(a.workspace.ratio=='1:1','held and released chord do not advance again')
 -- Both directions and modes preserve active B, both buffers, selection and undo.
-for _,direction in ipairs({3,4})do for _,focus in ipairs({false,true})do
-  h=Host.new();h:split(direction);h:split(9);a=h:state()
+for _,direction in ipairs({2,3})do for _,focus in ipairs({false,true})do
+  h=Host.new();h:split(direction);h:split(8);a=h:state()
   if focus then h:key('KeyF',nil,chord)end
   cycle(h);h:switch();h:open('bravo.md');h:edit(' B edit')
   local b=a.editor;local originalB=b.buffer:text();local pos=b.buffer.pos;b.anchor=0
@@ -26,7 +26,7 @@ for _,direction in ipairs({3,4})do for _,focus in ipairs({false,true})do
   for _,ratio in ipairs({'2:1','1:2','single','1:1'})do
     cycle(h)
     check((ratio=='single'and not a.workspace.split)or(a.workspace.split and a.workspace.ratio==ratio),'cycle reaches '..ratio)
-    check(a.workspace.direction==(direction==3 and 'horizontal'or'vertical')and a.focus_mode==focus,'cycle keeps direction and focus')
+    check(a.workspace.direction==(direction==2 and 'horizontal'or'vertical')and a.focus_mode==focus,'cycle keeps direction and focus')
     check(a.workspace.active==2 and a.editor==b and b.buffer.pos==pos and b.anchor==0,'cycle keeps active B and selection')
     check(a.workspace.sessions[1]==originalA and originalA.buffer:text()==textA and b.buffer:text()==originalB,'cycle keeps both sessions and contents')
     check(h.public_writes==writes and b.dirty,'cycle never saves either document')

@@ -24,7 +24,7 @@ local labels={};local g=setmetatable({text_box=function(_,x,y,w,h,t)labels[t]=tr
 u:draw(c,g);check(labels['Sign-in code: ABCD-EFGH\nApprove the App in your browser.'],'combined setup reaches normal QR/code approval screen')
 u,c,key,calls=setup();key('Enter');key('ArrowDown');key('ArrowDown');key('Enter')
 check(c.state.github_sync_enabled==true and not c.state.github_sync_remember and calls()==1,'session-only setup remains available without saved-credential consent')
-key('Enter');u.focus=4;key('Enter')
+key('Enter');u.focus=5;key('Enter')
 check(calls()==2 and u.page=='main','remembered session-only preference skips repeated setup choice')
 -- Remote-only update view always starts with Cancel and keeps copy alternative.
 u,c,key,calls=setup();u.session.pending_update={name='ideas.md',sha=string.rep('a',40)};u:tick(c)

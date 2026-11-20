@@ -119,7 +119,7 @@ h.ctx.screen={width=480,height=800};h.ctx.input={};local font={line_height=24,me
 local ui=UI.new({},font,font,{setup=manager,primitives=primitives});ui:open(h.ctx)
 check(ui.setup.active and ui.setup.fields.client_id==''and h.calls==0,'fresh setup presents empty public fields without network')
 local drawing=false;local labels={};local g={clear=function()end,text=function(_,_,_,t)labels[t]=true end,text_box=function(_,_,_,_,_,t)labels[t]=true end,rect=function()end,line=function()end}
-ui:draw(h.ctx,g);check(labels['Sign in and choose repository']and not labels['odklizec/inkwrite-docs / main'],'fresh setup does not advertise owner repo')
+ui:draw(h.ctx,g);check(labels['Sign in and choose repository >']and not labels['odklizec/inkwrite-docs / main'],'fresh setup does not advertise owner repo')
 ui:input(h.ctx,{type='key',key='back',phase='up'});check(not ui.active,'Back exits fresh setup')
 -- Whole UI flow uses actual Auth and Session, no token crosses the view boundary.
 h,sd=host();manager=Setup.new(h.ctx,{primitives=primitives});h.ctx.screen={width=480,height=800};h.ctx.input={}
@@ -139,9 +139,15 @@ press(1);h:respond({Host.branch()});ui:tick(h.ctx)
 check(ui.setup.page=='setup_branches','repository selection opens branch picker')
 press(1);h:respond(Host.user());selected_install(h);h:respond(Host.repositories());h:respond(Host.repository());h:respond(Host.branch());ui:tick(h.ctx)
 check(ui.setup.page=='setup_confirm'and not sd.files[Setup.FILE],'verified destination requires explicit Save')
+press(1);check(ui.setup.page=='setup_branches'and ui.focus==1,'Cancel returns to the selected branch')
+ui:input(h.ctx,{type='key',key='back',phase='up'})
+check(ui.setup.page=='setup_repos'and ui.focus==1,'Back restores the selected repository')
+press(1);h:respond({Host.branch()});ui:tick(h.ctx)
+press(1);h:respond(Host.user());selected_install(h);h:respond(Host.repositories());h:respond(Host.repository());h:respond(Host.branch());ui:tick(h.ctx)
+check(ui.setup.page=='setup_confirm','the original approval can verify a repeated branch choice')
 press(2);check(not ui.setup.active and manager.config.profile==1 and ui.session:status(h.ctx).connected,'Save switches actual runtime to verified candidate without another approval')
 check(not h.ctx.state.github_sync_auto and not h.ctx.state.github_sync_remember and not sd.files['gh1-github-connection.json'],'setup does not silently enable uploads or save credentials')
-press(6);press(2)
+press(6);press(3);press(2)
 check(h.ctx.state.github_sync_remember and sd.files['gh1-github-connection.json'],'Remember after setup saves candidate in correct profile')
 -- Setup drawing remains passive across device sizes and never needs top Back.
 for _,dims in ipairs({{480,800},{800,480}})do
@@ -150,4 +156,16 @@ for _,dims in ipairs({{480,800},{800,480}})do
  labels={};ui:draw(h.ctx,g)
  check(h.calls==calls and sd.writes==writes and labels['Back'],'setup draw has universal Back and no network or storage work')
 end
+h,sd=host();h.ctx.screen={width=480,height=800}
+manager=Setup.new(h.ctx,{primitives=primitives});c=Host.config();c.selectable=true
+assert(manager:save(c));c.scope.branch='drafts';assert(manager:save(c))
+ui=UI.new({},font,font,{setup=manager,primitives=primitives});ui:open(h.ctx)
+press(6);press(4);press(6)
+labels={};ui:draw(h.ctx,g)
+check(ui.setup.page=='setup_profiles'and labels['example/docs / main >']and not labels['example/docs / drafts >'],'saved repositories list only other destinations')
+press(1);press(1)
+check(ui.setup.page=='setup_profiles'and manager.config.scope.branch=='drafts'and h.calls==0,'cancel returns to saved repositories without changing setup or signing in')
+press(1);h.ctx.state.github_sync_auto=true;press(2)
+check(manager.config.scope.branch=='main'and not ui.setup.active and not ui.session:status(h.ctx).connected
+  and not h.ctx.state.github_sync_auto and h.calls==0,'switch reuses saved configuration, leaves uploads Off, and waits for Connect')
 return n

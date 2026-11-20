@@ -9,7 +9,7 @@ local function setup(w,h,size,count)
  u:tick(c)
  local function draw()
   local visible,texts={},{}
-  local g=setmetatable({text_box=function(_,x,y,w,ht,t)if t:match('^row%d+%.md$')then visible[#visible+1]=t end end,
+  local g=setmetatable({text_box=function(_,x,y,w,ht,t)if t:match('^row%d+%.md >$')then visible[#visible+1]=t end end,
    text=function(_,x,y,t)texts[t]=true end},{__index=function()return function()end end})
   u:draw(c,g);return table.concat(visible,','),texts
  end

@@ -48,7 +48,7 @@ You’ll create a **private repository**, which is the place on GitHub where you
 
 ## 5. Approve the connection on your reader
 
-1. Connect the reader to Wi‑Fi, open inkWrite and choose **Settings → More → GitHub sync**. On a fresh setup, this takes you straight to **GitHub setup**. If a destination is already configured, choose **GitHub setup / change repository** from the sync screen. Use **Next** if the screen has another page. On the Classic, use the direction buttons and **OK** to select entries. On the Pro, you can tap them.
+1. Connect the reader to Wi‑Fi, open inkWrite and choose **Settings → More → GitHub sync**. On a fresh setup, this takes you straight to **GitHub setup**. If a destination is already configured, choose **Settings → Set up or change repository** from the sync screen. Use **Next** if the screen has another page. On the Classic, use the direction buttons and **OK** to select entries. On the Pro, you can tap them.
 2. Select **Client ID**, **App ID**, and **GitHub login** one at a time. Enter the two IDs from your GitHub App’s settings and the username you chose when you signed up. Use the username by itself, without `@`, spaces, or `https://github.com/`.
 3. Choose **Sign in and choose repository**.
 
@@ -68,13 +68,13 @@ You’ll create a **private repository**, which is the place on GitHub where you
 ## 6. Check with one test document
 
 1. Return to the writing screen. Choose **New**, create a short plain-text or Markdown document, and type a harmless line such as `My first inkWrite sync.` Choose **Save**. Use a fresh, recognizable name such as `First-sync-test.txt` for plain text.
-2. Open **Settings → More → GitHub sync**. Check the repository and branch at the top and confirm that **GitHub sync** is **On**. Choose **Sync this document**. If approval is needed again, follow the code on the reader. A Bluetooth keyboard can also use **Ctrl+G** from the writing screen to start sync.
+2. Open **Settings → More → GitHub sync**. Check the repository and branch at the top. Under the GitHub **Settings**, confirm that **GitHub sync** is **On**. Go Back and choose **Sync this document**. If approval is needed again, follow the code on the reader. A Bluetooth keyboard can also use **Ctrl+G** from the writing screen to start sync.
 
    <img src="images/github-setup/inkwrite-sync.png" width="360" alt="inkWrite GitHub sync screen showing the example repository on main, connected status, and Sync this document">
 
 3. Wait for **Synced**. On your phone or computer, open your private repository, choose the same branch, refresh the page, and open the **`documents`** folder. Open your test file and check that it contains your line. inkWrite creates the folder with the first successful upload.
 
-**Save** normally saves to the reader’s SD card. Use **Sync this document** whenever you want to sync the open, saved file. If you later enable **Automatic uploads**, do so from the sync screen after checking the destination. To bring a GitHub document onto the reader, use **Browse remote documents**, select a file, and choose **Download as local copy**.
+**Save** normally saves to the reader’s SD card. Use **Sync this document** whenever you want to sync the open, saved file. If you later enable **Automatic uploads**, do so from the GitHub **Settings** after checking the destination. To bring a GitHub document onto the reader, use **Browse remote documents**, select a file, and choose **Download as local copy**.
 
 ## Choose whether to stay signed in
 
@@ -94,4 +94,4 @@ To remove the saved sign-in from the reader, choose **Forget saved connection**.
 | GitHub refuses the test upload | Check that you’re connected, **GitHub sync** is **On**, the test is saved as a short `.txt` or `.md` file, and the branch allows direct changes. Check the exact repository and branch again before retrying. |
 | inkWrite offers **Review both versions** or **Update local document** | There is already a version on GitHub. For a first test, save a new document with a different filename. For real writing, read both versions before choosing which to keep. |
 
-To switch destinations later, return to **GitHub setup / change repository**. Set up the new destination or select an entry beginning with **Use saved** and confirm. inkWrite keeps separate sync records and queued uploads for each setup, and turns automatic uploads off when switching. Check the destination before uploading again.
+To switch destinations later, open **GitHub sync → Settings → Set up or change repository**. Choose **Switch to a saved repository** to select a previously configured GitHub App, account, repository and branch. Confirm the selection, then use **Connect** to verify access. Each setup keeps its own sync records and queued uploads. Switching turns automatic uploads off.
