@@ -1,7 +1,7 @@
 Release 1.0.25 includes 25 runtime Lua modules. Studio source files are UTF-8
 text: binary documentation screenshots stay in the GitHub repository and are
 not newly imported into project-files/. Existing Studio documentation entries
-are retained verbatim. The preserved docs/gtihub_guide HTML guide embeds
+are retained verbatim. The preserved docs/github_guide HTML guide embeds
 its illustrations and remains readable independently. XIC icons and the store
 cover retain their proper asset/presentation paths. The exporter rejects any
 remaining non-UTF-8 source instead of silently damaging it during import.

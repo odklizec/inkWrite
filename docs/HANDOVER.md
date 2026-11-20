@@ -28,7 +28,7 @@ Manifest and in-app version are aligned to 1.0.23 (API 2.26 unchanged).
 Original app: inkwrite, project bc6ebcee-26df-4d19-b814-b9e488605d51.
 A pre-update backup preserves its source, icons, cover and project identity.
 Original runtime matches main 2dc835e; three cloud-only illustrated setup guide
-files under docs/gtihub_guide are retained in the repository and release.
+files under docs/github_guide are retained in the repository and release.
 The existing workspace/chat is retained rather than reloaded from cloud.
 
 Split implementation and user follow-ups are included: both directions,

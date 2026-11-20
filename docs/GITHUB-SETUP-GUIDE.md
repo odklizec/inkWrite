@@ -52,16 +52,16 @@ You’ll create a **private repository**, which is the place on GitHub where you
 2. Select **Client ID**, **App ID**, and **GitHub login** one at a time. Enter the two IDs from your GitHub App’s settings and the username you chose when you signed up. Use the username by itself, without `@`, spaces, or `https://github.com/`.
 3. Choose **Sign in and choose repository**.
 
-   <img src="images/github-setup/inkwrite-setup.png" width="360" alt="inkWrite setup screen showing Client ID, App ID, GitHub login, and Sign in and choose repository">
+   <img src="github_guide/images/github-setup/inkwrite-setup.png" width="360" alt="inkWrite setup screen showing Client ID, App ID, GitHub login, and Sign in and choose repository">
 
 4. Leave inkWrite open. When the sign-in code appears, scan the QR with your phone’s camera or open [GitHub’s device sign-in page](https://github.com/login/device) on your phone or computer. The QR opens the sign-in page. Type the short code shown on **your** reader into GitHub, then follow the prompts. Check that GitHub shows the personal account and App name you expect before you approve. The code is temporary and should be entered only on GitHub. [GitHub’s explanation of device sign-in](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app#using-the-device-flow-to-generate-a-user-access-token)
 
-   <img src="images/github-setup/inkwrite-device-code.png" width="360" alt="inkWrite approval screen showing github.com/login/device, the sample code ABCD-EFGH, and a QR code for the sign-in page">
+   <img src="github_guide/images/github-setup/inkwrite-device-code.png" width="360" alt="inkWrite approval screen showing github.com/login/device, the sample code ABCD-EFGH, and a QR code for the sign-in page">
 
 5. Return to your reader and wait for **Choose private repository**. Select your writing repository, for example `alex-ink/inkwrite-docs`. Under **Choose branch**, select the branch you noted earlier, usually `main`.
 6. Check the repository, username, and branch on the confirmation screen, then select **Save and use this setup**. inkWrite keeps that destination and uses the approval you just completed. Your writing stays on the SD card until you choose to sync it. **Automatic uploads** start **Off**.
 
-   <img src="images/github-setup/inkwrite-save-setup.png" width="360" alt="inkWrite confirmation showing the example private repository, username, branch, and Save and use this setup">
+   <img src="github_guide/images/github-setup/inkwrite-save-setup.png" width="360" alt="inkWrite confirmation showing the example private repository, username, branch, and Save and use this setup">
 
 *The inkWrite images are rendered from version 1.0.21 with sample values. The code `ABCD-EFGH` is for illustration.*
 
@@ -70,7 +70,7 @@ You’ll create a **private repository**, which is the place on GitHub where you
 1. Return to the writing screen. Choose **New**, create a short plain-text or Markdown document, and type a harmless line such as `My first inkWrite sync.` Choose **Save**. Use a fresh, recognizable name such as `First-sync-test.txt` for plain text.
 2. Open **Settings → More → GitHub sync**. Check the repository and branch at the top. Under the GitHub **Settings**, confirm that **GitHub sync** is **On**. Go Back and choose **Sync this document**. If approval is needed again, follow the code on the reader. A Bluetooth keyboard can also use **Ctrl+G** from the writing screen to start sync.
 
-   <img src="images/github-setup/inkwrite-sync.png" width="360" alt="inkWrite GitHub sync screen showing the example repository on main, connected status, and Sync this document">
+   <img src="github_guide/images/github-setup/inkwrite-sync.png" width="360" alt="inkWrite GitHub sync screen showing the example repository on main, connected status, and Sync this document">
 
 3. Wait for **Synced**. On your phone or computer, open your private repository, choose the same branch, refresh the page, and open the **`documents`** folder. Open your test file and check that it contains your line. inkWrite creates the folder with the first successful upload.
 
