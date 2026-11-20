@@ -43,8 +43,8 @@ local function exercise(width,height,line_height,touch)
     local r=labels[names[2]]
     App.input(c,{type='pointer',phase='up',gesture='tap',x=r.x+4,y=r.y+r.h//2})
   else key('ArrowDown');key('Enter')end
-  check(a.view=='editor' and a.doc.name==names[2],'touch/button row opens the intended file')
-  check(a.buffer:text()==files[names[2]],'opening preserves exact UTF8 and CRLF bytes')
+  check(a.view=='editor' and a.editor.doc.name==names[2],'touch/button row opens the intended file')
+  check(a.editor.buffer:text()==files[names[2]],'opening preserves exact UTF8 and CRLF bytes')
   check(writes==0,'listing/opening does not write public documents')
 end
 for _,dims in ipairs({{480,800},{800,480}})do

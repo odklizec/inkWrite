@@ -1,5 +1,17 @@
 # inkWrite
 
+Version **1.0.23** includes **split screen**: Settings > More > Split screen or
+**Ctrl+Shift+P**. Choose top/bottom or left/right and 1:1, 2:1 or 1:2. Both panes
+remain visible in focus mode. Direction defaults to **Auto: follow screen**:
+portrait uses top/bottom; landscape uses left/right. Choosing either fixed
+direction in Split screen settings keeps that choice through rotation and
+reopening. Choose Auto again to follow the screen. **Ctrl+Tab**, Classic Left/Right, or a Pro header
+tap changes the active pane; New/Open/Save target it. Save all / Discard all on
+exit include hidden documents. See the [implementation and device acceptance
+plan](docs/SPLIT-SCREEN-PLAN.md). Desktop and native Pro/Classic simulator
+checks pass; the owner reported hardware testing good on 20 November 2026.
+See [1.0.23 release notes](docs/RELEASE-1.0.23.md).
+
 For Studio imports use the corrected exporter described in
 [Studio project layout](docs/STUDIO-PROJECT-LAYOUT.md). Desktop tests and the
 separate diagnostic are stored there as text references, avoiding mixed app roots.
@@ -60,7 +72,7 @@ Settings → Type shows the actual font in use and offers size, line spacing and
 
 Choose your font in **Ink App → Settings → Font**, then close and reopen inkWrite. Place `.ttf` files in the SD card fonts folder if needed. inkWrite requests the chosen font for writing and controls using the current host API; the actual returned font name appears in Typography. The size choices are 20/24/28/30/32/36 px. If the host cannot use the selected file, it may return the reader font or a built-in fallback; the latter is shown as **System fallback**. Glyph coverage depends on the font. The host owns font memory and caching; inkWrite uses six size choices and opens sizes outside drawing.
 
-**Settings → Screen** or **Ctrl+Shift+S** toggles portrait and landscape. The choice is remembered for the next open; it applies only to inkWrite and does not change device settings.
+**Settings → Screen** or **Ctrl+Shift+R** toggles portrait and landscape. The choice is remembered for the next open; it applies only to inkWrite and does not change device settings.
 
 ## Files, saving and recovery
 
@@ -101,7 +113,8 @@ Optional manual GitHub transfers are available through Settings → More → Git
 | Ctrl+Left / Right | Move by word |
 | PageUp / PageDown | Move by page |
 | Ctrl+Shift+F | Toggle focus |
-| Ctrl+Shift+S | Rotate screen |
+| Ctrl+Shift+S | Cycle split: 1:1 → 2:1 → 1:2 → single pane |
+| Ctrl+Shift+R | Rotate screen |
 | Left Alt+Shift / Ctrl+Space | Next selected keyboard |
 | Ctrl+R | Full refresh |
 | Escape | More menu / return to writing |

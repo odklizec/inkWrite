@@ -31,7 +31,7 @@ local g=setmetatable({text=function(_,x,y,s,o)drawn[#drawn+1]=s;used[#used+1]=o 
 local function draw()drawn={};used={};local before=calls;drawing=true;App.draw(c,g);drawing=false;check(calls==before,'draw reuses font objects')end
 local function key(code,mods)App.input(c,{type='key',source='keyboard',phase='down',code=code,mods=mods or {}})end
 draw();for _,f in ipairs(used)do if f then check(f.name==chosen,'all editor chrome uses selected TTF')end end
-local text=a.buffer:text();local pos=a.buffer.pos;a.anchor=0
+local text=a.editor.buffer:text();local pos=a.editor.buffer.pos;a.editor.anchor=0
 a.view='typography';App.tick(c);draw()
 check(a.preview_cache.font==cache[32],'preview uses actual selected body font')
 for i,px in ipairs({20,24,28,30,32,36})do
@@ -40,16 +40,16 @@ end
 local count=0;for _ in pairs(requested)do count=count+1 end;check(count==6,'bounded six unique sizes')
 for i=1,40 do a.type_focus=i%6+3;key('Enter')end
 local finalcount=0;for _ in pairs(requested)do finalcount=finalcount+1 end;check(finalcount==6,'repeated controls cannot expand font size ladder')
-check(a.buffer:text()==text and a.buffer.pos==pos and a.anchor==0 and c.writes==0,'typography keeps document, selection and public files')
+check(a.editor.buffer:text()==text and a.editor.buffer.pos==pos and a.editor.anchor==0 and c.writes==0,'typography keeps document, selection and public files')
 a.type_focus=1;key('Enter');check(a.view=='font_help','font button directs to system settings')
 a.view='editor';a.virtual=true;App.tick(c);draw()
 local dash=false;local dots=false;for _,s in ipairs(drawn)do dash=dash or s=='--';dots=dots or s=='...' end
 check(dash and dots,'virtual dash and ellipsis have readable ASCII labels')
-a.anchor=nil;a.buffer:seek(a.buffer.size)
+a.editor.anchor=nil;a.editor.buffer:seek(a.editor.buffer.size)
 App.input(c,{type='pointer',phase='up',gesture='tap',x=150,y=600})
-check(a.buffer:text()==text..'—','ASCII dash label still inserts Unicode em dash')
+check(a.editor.buffer:text()==text..'—','ASCII dash label still inserts Unicode em dash')
 App.input(c,{type='pointer',phase='up',gesture='tap',x=210,y=600})
-check(a.buffer:text()==text..'—…','ASCII dots label still inserts Unicode ellipsis')
+check(a.editor.buffer:text()==text..'—…','ASCII dots label still inserts Unicode ellipsis')
 -- New session follows a changed system selection, retaining size.
 local d=host({['test.md']='keep'},{});d.state={last='test.md',font_px=36};d.capabilities={ttf=false}
 local other={name='AnotherUserFont',px=36,line_height=44,measure=function(_,s)return (utf8.len(s)or 0)*18 end}

@@ -17,22 +17,22 @@ local f={line_height=36,measure=function(_,s)return (utf8.len(s) or 0)*18 end}
 ctx.fonts={medium=f,large=f,small=f}
 local App=require('domain.app');App.load(ctx)
 local A;for i=1,50 do local name,value=debug.getupvalue(App.draw,i);if not name then break end;if name=='A'then A=value;break end end
-check(A and A.layout_revision==A.buffer.revision,'initial prepared')
-check(A.buffer.size==32768,'maximum document loaded');check(extended>0,'budget requested')
+check(A and A.editor.layout_revision==A.editor.buffer.revision,'initial prepared')
+check(A.editor.buffer.size==32768,'maximum document loaded');check(extended>0,'budget requested')
 local drawn={};local g=setmetatable({text=function(_,x,y,s)drawn[#drawn+1]=s end},{__index=function()return function()end end})
 local function draw()drawing=true;App.draw(ctx,g);drawing=false end
 local count=layouts;draw();draw();check(layouts==count,'cached draw')
-for _,r in ipairs(A.rows)do check(utf8.len(r.text)~=nil,'UTF8 row');check(A.buffer:is_boundary(r.a) and A.buffer:is_boundary(r.z),'UTF8 bounds')end
+for _,r in ipairs(A.editor.rows)do check(utf8.len(r.text)~=nil,'UTF8 row');check(A.editor.buffer:is_boundary(r.a) and A.editor.buffer:is_boundary(r.z),'UTF8 bounds')end
 App.input(ctx,{type='key',source='keyboard',phase='down',code='KeyA',mods={ctrl=true}})
 App.input(ctx,{type='key',source='keyboard',phase='down',code='KeyX',text='abc ž',mods={}})
-check(A.buffer:text()=='abc ž','selected replacement');check(A.redraw_timer~=nil,'coalesced frame retained')
+check(A.editor.buffer:text()=='abc ž','selected replacement');check(A.editor.redraw_timer~=nil,'coalesced frame retained')
 count=layouts;drain();check(layouts>count,'timer prepared edit');count=layouts;draw();check(layouts==count,'edited draw read only')
 for _,view in ipairs({'typography','help','files_help','font_help'})do
   A.view=view;App.input(ctx,{type='noop'});count=layouts;draw();draw();check(layouts==count,view..' prepared')
 end
 A.view='editor';App.input(ctx,{type='noop'});draw()
-ctx.screen.width=800;ctx.screen.height=480;count=layouts;draw();check(layouts==count,'rotation draw queues work');check(A.touch_geometry==nil,'stale touch disabled')
-check(A.prepare_timer~=nil,'one prepare queued');local queued=#queue;draw();check(#queue==queued,'no duplicate timer');drain();draw();check(A.touch_geometry~=nil,'rotation published')
+ctx.screen.width=800;ctx.screen.height=480;count=layouts;draw();check(layouts==count,'rotation draw queues work');check(A.editor.touch_geometry==nil,'stale touch disabled')
+check(A.prepare_timer~=nil,'one prepare queued');local queued=#queue;draw();check(#queue==queued,'no duplicate timer');drain();draw();check(A.editor.touch_geometry~=nil,'rotation published')
 A.body_font={line_height=64,measure=function(_,s)return (utf8.len(s) or 0)*32 end};A.spacing=14;A.margin=56
 App.resume(ctx);count=layouts;draw();check(layouts==count,'largest font prepared on resume')
 App.input(ctx,{type='key',key='back',phase='up'});check(A.close_modal and A.close_modal.choice==1,'safe dirty close')

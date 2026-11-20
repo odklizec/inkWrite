@@ -1,3 +1,139 @@
+## Split-screen release 1.0.23 - 2026-11-20
+
+The owner reported hardware testing good and authorized the version update,
+merge into main, update of the original inkWrite Studio app and GitHub save.
+Manifest and in-app version are aligned to 1.0.23 (API 2.26 unchanged).
+Original app: inkwrite, project bc6ebcee-26df-4d19-b814-b9e488605d51.
+A pre-update backup preserves its source, icons, cover and project identity.
+Original runtime matches main 2dc835e; three cloud-only illustrated setup guide
+files under docs/gtihub_guide are retained in the repository and release.
+The existing workspace/chat is retained rather than reloaded from cloud.
+
+Split implementation and user follow-ups are included: both directions,
+three ratios, normal/focus, two independent documents, active-pane commands,
+recovery/autosave/sync guards, Ctrl+Shift+S ratio cycle, Ctrl+Shift+R rotation,
+and Auto first under Back to writing. Manual direction choices persist.
+35 desktop suites / 19,758 assertions passed before release metadata changes;
+the full suite is rerun for the release. Hardware acceptance is owner-reported;
+no new exhaustive SD/power-loss matrix is claimed. See RELEASE-1.0.23.md.
+
+## Auto default and menu order - 2026-11-19
+
+Auto: follow screen is now directly under Back to writing (row 2). Fixed
+directions follow it; ratio, switch, single, focus and keyboard-cycle routing
+have been updated for the new order. New workspaces and older preferences
+without a saved direction_auto flag default to Auto. Explicit false/manual
+choices still persist. This supersedes the earlier legacy-default policy.
+35/35 desktop suites pass, 19,758 assertions; rotation/Auto suite: 127 checks,
+including visible menu order/default marker and selecting the second row.
+Native Pro preview shows Auto marked directly below Back to writing; no
+runtime errors or diagnostics. Preview source revision:
+8bd8ef37d0c7b033f99169a170e4d6bd7aac3667fe087d13e7dfc5922f011aae.
+Manifest version, main and the original cloud project remain unchanged.
+
+## Automatic split direction - 2026-11-19
+
+New workspaces default to Auto: follow screen: portrait -> top/bottom,
+landscape -> left/right. Selecting either fixed direction disables Auto and
+persists the choice through rotations/reopenings. A new Auto row at the end of
+Split settings releases the override. Ratio cycling and single-pane mode keep
+the chosen policy. Existing saved directions without the new boolean flag stay
+fixed; malformed flags are protected. Effective direction derives from current
+screen size, including asynchronous rotation, without mutating either session.
+Rotation queues preparation from input for the next host size, outside drawing.
+
+35/35 desktop suites pass, 19,755 assertions; 124 new checks cover Auto/fixed,
+both modes/shapes, delayed rotation, persistence/legacy/invalid settings,
+recovery failure, document/selection/undo retention and frame preparation.
+The test host no longer swaps dimensions on a redundant orientation request.
+Native revision 1e04fff913a8b5a934d42722151a70a19fda994efeced185ca489b0183d3ad58:
+Pro showed Auto in both screen shapes, fixed top/bottom after a full rotation
+round trip, then Auto restored. Classic/Pro restart and Classic Left/Right
+passed without faults. The preview required an additional input to complete a
+rotated prepared frame; idle timer delivery and immediate redraw still need a
+physical-device check. No runtime errors. Studio's refresh-full-input warning
+after four rotations is consistent with the host's required orientation full
+refresh. No original cloud save, main merge, version bump or Store release.
+
+## Split shortcut update - 2026-11-19
+
+Ctrl+Shift+S now cycles single -> 1:1 -> 2:1 -> 1:2 -> single using the
+existing guarded split actions. It keeps the direction, focus mode, active
+pane, both sessions, selection and undo. Only key down advances the cycle;
+repeat/up are consumed. Rotation moved to Ctrl+Shift+R. Ctrl+S and Ctrl+R
+retain Save and full refresh. In-app help, README and the plan are updated.
+
+34/34 desktop suites pass, 19,631 assertions, including 99 new shortcut checks.
+They cover fresh enable, both directions/modes, active B and hidden sessions,
+selection/undo, no incidental public save or rotation, hold/release, overlays,
+failed recovery migration/retry and the unchanged Save/refresh shortcuts.
+The isolated native preview was updated to revision
+`e55e40805752b370200513dcbcfe78d1d72debeeb3fdfe0be39c2524e9db21f7`.
+Pro and Classic restart without diagnostics; Classic Left/Right/OK/Back were
+handled with null faults. Pro is left running. The preview input tools expose
+device controls rather than raw Bluetooth chords, so the new chords themselves
+are covered by desktop tests and still need a physical keyboard check.
+Original cloud app, manifest version and main are unchanged.
+
+## Functional split-screen test branch - 2026-11-19
+
+Continued test/split-screen-foundation-2026-11-19 with horizontal/vertical panes,
+1:1 / 2:1 / 1:2 ratios, normal/focus rendering, independent document/view/undo
+state and active-pane file commands. Settings > More > Split screen or
+Ctrl+Shift+P opens presets. Ctrl+Tab switches; Classic Left/Right select A/B;
+focus OK opens Split settings. Pro header tap activates, header hold opens
+settings, and text tap activates/places the caret. Both headers retain filename,
+dirty/error prefix and active fill/marker. Save label/browser identify A/B.
+
+Workspace storage is enabled only by deliberate split use. Added validated
+small preferences, discovery of both recovery slots, guarded legacy migration,
+clean recovery cleanup before replacement, hidden-session autosave, Save all /
+Discard all exit and failed-write protection. Scope-aware remote replacement
+handles loaded inactive sessions; automatic uploads wait while either session
+is dirty/failed. Library operations cannot manage another open pane's file.
+Inactive frames are cached and wrapping stays outside draw. A settings-save
+failure retains both discoverable recovery records; malformed records remain
+protected. Earlier single-pane builds do not load the slot format.
+
+33/33 desktop suites pass, 19,532 assertions. New writer suite: 194 checks;
+actual sync workflow suite now 62 checks, including dirty active A preserved
+while updating B, late B edits/replacement identity rejection and auto guards.
+Static export closure has 25 runtime Lua modules and the two existing icons.
+Separate preview identity inkwrite.split-screen-preview is running in plugin
+project f1ec8532-6e59-448c-aa1c-751b802089d1. Native Pro verified both documents,
+directions, all ratios, normal/focus, rotation, header activation, virtual typing
+and Save B. App-file reads verified Alpha unchanged at 148 bytes and Bravo with
+an appended q at 155 bytes. Final native Classic restart/Left/Right/OK/Back all
+passed with null faults; final Pro restart retained focus and workspace state.
+Both devices reported empty diagnostics. Final source revision is
+b7dca52c987916f7b50fa9762b880617a3e5fbdfc47f4d7f4c596d5e5e46e29f.
+No real GitHub transfer, physical hardware or SD interruption test is claimed.
+See SPLIT-SCREEN-PLAN.md for usage and remaining device gates. Manifest/API/menu
+numbering are unchanged. No original cloud update, main merge or Store release.
+
+## Historical split-screen foundation milestone - 2026-11-19
+
+Started from main 2dc835e (manifest 1.0.22, runtime constant 1.0.20) on
+test/split-screen-foundation-2026-11-19. Document/view state now lives in
+A.editor; shared keyboard, typography, clipboard, statistics and GitHub services
+stay on A. Extracted explicit session construction/edit/save/checkpoint/snapshot
+operations. Redraw/navigation timers reject callbacks from replaced sessions.
+Added two independent optional recovery slots, verified opt-in legacy migration,
+two-name reservations, bounded workspace activation and pure pane geometry.
+Single-pane startup still uses legacy recovery; dual startup, visible split UI,
+both-session autosave/exit/library and all-name sync ownership are the next gates.
+See SPLIT-SCREEN-PLAN.md for the revised product plan, new auto-upload/conflict
+review requirements and staged implementation. Do not enable migration or expose
+split controls before those gates. No release numbering, main merge, original
+cloud overwrite or Store publication is part of this foundation milestone.
+
+32/32 desktop suites pass (19,320 assertions). Session/recovery/controller suite:
+59 checks; geometry: 3,084 checks / 96 configurations. Packaging closure validates
+25 executable Lua modules and the existing icons. Isolated native preview was
+attempted but requires Studio sign-in at the returned URL; no native-rendering
+or hardware verification is claimed. Canonical original cloud identity below
+remains authoritative; preview app_id is inkwrite.split-foundation-preview.
+
 ## Canonical original inkWrite project - 2026-11-19
 
 Owner requested consolidating Phase 0 into the original inkWrite and retaining only one inkWrite cloud project. Canonical Studio identity is bc6ebcee-26df-4d19-b814-b9e488605d51, app_id inkwrite, display name inkWrite. The former development project e6d7a10b-8bdc-4f4c-bf77-1f5dfa1e5395 is superseded. Original 1.0.1 project was exported before replacement; preserve its Store cover, asset references, project ID, local chat and listing link. The replacement uses merged main application code and manifest 1.0.21. Exporter now inherits the destination template name, avoiding new Phase 0 copies. Cloud save/round-trip verification and any duplicate cleanup are recorded separately in delivery artifacts. Do not publish to Store automatically. Future updates go to the original inkWrite project and main GitHub branch; preview copies remain temporary.

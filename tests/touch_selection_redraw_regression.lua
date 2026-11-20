@@ -23,33 +23,33 @@ local function setup(w,h,line)
   line=function(_,x,y,z,t)lines[#lines+1]={x,y,z,t}end},{__index=function()return function()end end})
  local function draw()fills=0;lines={};drawing=true;App.draw(c,g);drawing=false;return fills,lines end
  local function tap(x,t,gesture)
-  c.time=t;local p=a.prepared
+  c.time=t;local p=a.editor.prepared
   App.input(c,{type='pointer',phase='up',gesture=gesture or 'tap',x=x,y=(c.screen.occlusion.top or 0)+(a.focus_mode and 48 or 88),time_ms=t})
  end
  draw();return a,c,tap,draw,timers
 end
 for _,d in ipairs({{480,800},{800,480}})do for _,line in ipairs({24,44})do
  local a,c,tap,draw,timers=setup(d[1],d[2],line)
- local first=a.prepared;tap(150,1000)
- check(a.buffer.pos>0,'single touch moves live caret')
- check(a.prepared.pos==a.buffer.pos and a.prepared~=first,'single touch immediately publishes current caret without Settings/keyboard/timer')
- local _,lines=draw();local p=a.prepared;local x=24+p.caret.x;local y=78+(p.caret.row-1)*(line+8);local found=false
+ local first=a.editor.prepared;tap(150,1000)
+ check(a.editor.buffer.pos>0,'single touch moves live caret')
+ check(a.editor.prepared.pos==a.editor.buffer.pos and a.editor.prepared~=first,'single touch immediately publishes current caret without Settings/keyboard/timer')
+ local _,lines=draw();local p=a.editor.prepared;local x=24+p.caret.x;local y=78+(p.caret.row-1)*(line+8);local found=false
  for _,v in ipairs(lines)do if v[1]==x and v[2]==y and v[3]==x and v[4]==y+line then found=true end end
  check(found,'next draw actually paints caret at the touched location')
  tap(48,3000);draw();tap(48,3200,'double_tap')
- check(a.anchor~=nil and a.buffer:slice(a.anchor,a.buffer.pos)=='Alpha','double tap selects the word')
- check(a.prepared.anchor==a.anchor and a.prepared.pos==a.buffer.pos,'double tap immediately publishes selection endpoints')
+ check(a.editor.anchor~=nil and a.editor.buffer:slice(a.editor.anchor,a.editor.buffer.pos)=='Alpha','double tap selects the word')
+ check(a.editor.prepared.anchor==a.editor.anchor and a.editor.prepared.pos==a.editor.buffer.pos,'double tap immediately publishes selection endpoints')
  local fill=draw();check(fill>0,'next draw paints word-selection highlight')
  tap(48,3400)
- check(a.anchor~=nil and a.buffer.pos>5 and a.prepared.pos==a.buffer.pos,'triple tap immediately publishes full sentence selection')
+ check(a.editor.anchor~=nil and a.editor.buffer.pos>5 and a.editor.prepared.pos==a.editor.buffer.pos,'triple tap immediately publishes full sentence selection')
  fill=draw();check(fill>0,'next draw paints sentence-selection highlight')
  tap(150,6000);fill=draw()
- check(a.anchor==nil and a.prepared.anchor==nil and fill==0,'later single tap immediately clears old highlight')
+ check(a.editor.anchor==nil and a.editor.prepared.anchor==nil and fill==0,'later single tap immediately clears old highlight')
  -- Cancel a still-live typing coalescer only after the new text was actually drawn.
  App.input(c,{type='key',source='keyboard',phase='down',code='KeyX',text='x',mods={}});draw()
- check(a.redraw_timer~=nil,'typing coalescer active before touch')
- tap(48,8000);local prepared=a.prepared;check(a.redraw_timer==nil and prepared.pos==a.buffer.pos,'touch cancels typing timer and publishes its own visual state')
+ check(a.editor.redraw_timer~=nil,'typing coalescer active before touch')
+ tap(48,8000);local prepared=a.editor.prepared;check(a.editor.redraw_timer==nil and prepared.pos==a.editor.buffer.pos,'touch cancels typing timer and publishes its own visual state')
  for _,t in ipairs(timers)do if not t.cancelled then t.fn(c)end end
- check(a.prepared.pos==a.buffer.pos,'cancelled timer cannot restore a stale caret')
+ check(a.editor.prepared.pos==a.editor.buffer.pos,'cancelled timer cannot restore a stale caret')
 end end
 return n
