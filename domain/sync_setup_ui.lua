@@ -128,27 +128,27 @@ function M.new(manager,changed,dependencies)
       rows={{label='Client ID: '..self.fields.client_id,action='setup_edit',field='client_id',title='GitHub App public Client ID'},
         {label='App ID: '..self.fields.app_id,action='setup_edit',field='app_id',title='GitHub App numeric ID'},
         {label='GitHub login: '..self.fields.login,action='setup_edit',field='login',title='Your GitHub login'},
-        {label='Sign in and choose repository >',action='setup_signin'},
-        {label='Setup instructions >',action='setup_help'}}
+        {label='Sign in and choose repository',action='setup_signin'},
+        {label='Setup instructions',action='setup_help'}}
       if manager.config then header[2]='Active: '..manager.config.scope.repo..' / '..manager.config.scope.branch end
       for _,v in ipairs(manager.profiles)do
         if not manager.config or v.profile~=manager.config.profile then
-          rows[#rows+1]={label='Switch to a saved repository >',action='setup_profiles'};break
+          rows[#rows+1]={label='Switch to a saved repository...',action='setup_profiles'};break
         end
       end
-      if manager.error then rows={{label='Setup instructions >',action='setup_help'}}end
+      if manager.error then rows={{label='Setup instructions',action='setup_help'}}end
     elseif self.page=='setup_profiles'then
       header={'Saved repositories','Choose a repository and branch',''}
       for i,v in ipairs(manager.profiles)do
         if not manager.config or v.profile~=manager.config.profile then
-          rows[#rows+1]={label=v.scope.repo..' / '..v.scope.branch..' >',action='setup_saved',number=i}
+          rows[#rows+1]={label=v.scope.repo..' / '..v.scope.branch,action='setup_saved',number=i}
         end
       end
     elseif self.page=='setup_help'then
       header={'Before signing in','Your own GitHub App and private repository',M.instructions}
     elseif self.page=='setup_repos'or self.page=='setup_branches'then
       local repos=self.page=='setup_repos';header[2]=(repos and 'Choose private repository'or 'Choose branch')..' / page '..self.list.page
-      for _,v in ipairs(self.list.rows)do rows[#rows+1]={label=(repos and v.full_name or v.name)..' >',action=repos and 'setup_repo'or 'setup_branch',file=v}end
+      for _,v in ipairs(self.list.rows)do rows[#rows+1]={label=(repos and v.full_name..'...' or v.name),action=repos and 'setup_repo'or 'setup_branch',file=v}end
       if self.list.page>1 then rows[#rows+1]={label='Previous results',action=repos and 'setup_repos'or 'setup_branches',number=self.list.page-1}end
       if self.list.more then rows[#rows+1]={label='More results',action=repos and 'setup_repos'or 'setup_branches',number=self.list.page+1}end
     elseif self.page=='setup_confirm'then

@@ -44,7 +44,7 @@ text=draw();left,right=text['Local / Page 1'],text['GitHub / Page 1']
 check(left and right and left.y==right.y and left.x<right.x,'landscape lays out both sources side by side')
 key('ArrowLeft');key('PageDown');key('Tab');key('PageDown')
 check(u.comparison.readers[1].page==2 and u.comparison.readers[2].page==2,'keyboard can page and switch between both panes')
-text=draw();touch(text['Actions >'].x,text['Actions >'].y)
+text=draw();touch(text['Actions'].x,text['Actions'].y)
 check(u.page=='review','touch opens version actions from comparison')
 key('Enter');check(u.page=='resolve_local'and u.focus==1,'local replacement defaults to Cancel')
 key('Enter');check(u.page=='review'and u.session.review==review,'Cancel preserves both captured versions without an operation')
@@ -57,5 +57,5 @@ u.session.review={name='ideas.md',file={bytes=''},remote={exists=false}};u:tick(
 text=draw()
 check(text['Empty file'] and text['No GitHub version'],'missing GitHub text is distinct from an empty local file')
 key('Enter');text=draw()
-check(not text['Use GitHub version locally...']and text['Keep local version on GitHub...'],'missing GitHub version cannot replace local text')
+check(not text['Use GitHub version locally']and text['Keep local version on GitHub'],'missing GitHub version cannot replace local text')
 return n

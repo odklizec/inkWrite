@@ -7,7 +7,7 @@ local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
 local SyncUI=require('domain.sync_ui')
-local M={VERSION="1.0.26"}
+local M={VERSION="1.0.27"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 -- Typing pacing. None of these shorten the panel's own frame time; they keep
@@ -149,7 +149,7 @@ local function geometry(ctx,editor,slot)
     l.preview={x=o.left+A.margin,y=l.body,w=ctx.screen.width-o.right-o.left-2*A.margin,count=count,h=height}
     l.type_notice_y=base-60
     local half=(l.w-16)//2
-    cs[1]={x=l.x,y=base+(horizontal and 20 or 0),w=horizontal and half or l.w,h=44,kind="font",label="Font: "..(A.font_name=="" and "System" or A.font_name).." >"}
+    cs[1]={x=l.x,y=base+(horizontal and 20 or 0),w=horizontal and half or l.w,h=44,kind="font",label="Font: "..(A.font_name=="" and "System" or A.font_name)}
     local sizes=FONT_SIZES
     local cell=(horizontal and half or l.w)//(#sizes+2)
     local sx=horizontal and l.x+half+16 or l.x;local sy=base+(horizontal and 20 or 80)
@@ -160,7 +160,7 @@ local function geometry(ctx,editor,slot)
     for group,values in ipairs({{4,8,14},{24,40,56}}) do
       for i,value in ipairs(values) do cs[#cs+1]={x=l.x+(group-1)*(half+16)+(i-1)*width,y=gy,w=width,h=44,kind=group==1 and "spacing" or "margin",value=value,label=({"S","M","L"})[i],selected=(group==1 and A.spacing or A.margin)==value} end
     end
-    cs[#cs+1]={x=horizontal and l.right-44 or l.x,y=horizontal and o.top+2 or base+226,w=horizontal and 44 or l.w,h=horizontal and 40 or 44,kind="help",label=horizontal and "?>" or "Font settings >"}
+    cs[#cs+1]={x=horizontal and l.right-44 or l.x,y=horizontal and o.top+2 or base+226,w=horizontal and 44 or l.w,h=horizontal and 40 or 44,kind="help",label=horizontal and "?" or "Font settings"}
     l.type_labels={{x=sx,y=sy-24,text="Text size"},{x=l.x,y=gy-24,text="Line spacing"},{x=l.x+half+16,y=gy-24,text="Margins"}}
   end
   return l
@@ -616,11 +616,11 @@ local function toggle_orientation(ctx)
   end)
 end
 local more_rows={
-  {label="Where are my files? >",command=6},
-  {label="Keyboard help >",command=7},
-  {label="Statistics >",command=15},
-  {label="GitHub sync >",command=16},
-  {label="Split screen >",command=17}
+  {label="Where are my files?",command=6},
+  {label="Keyboard help",command=7},
+  {label="Statistics",command=15},
+  {label="GitHub sync...",command=16},
+  {label="Split screen...",command=17}
 }
 local BACK_TO_WRITING="Back to writing"
 -- Ask only for sizes. API 2.17+ selects the user's Ink App font.
@@ -1844,8 +1844,7 @@ local function editor_chrome(ctx,g,l)
     local r=l.controls[i];local cx=r.x+r.w//2
     if A.action_focus==i then g:rect(r.x+2,r.y+2,r.w-4,r.h-4,{radius=4,line_width=2}) end
     icon(g,i==3 and "Save"or labels[i],cx-10,r.y+8)
-    local label=labels[i]..((i==1 or i==2 or i==4) and " >" or "")
-    g:text(cx,r.y+48,label,{font=ui,align="center",valign="middle"})
+    g:text(cx,r.y+48,labels[i],{font=ui,align="center",valign="middle"})
   end
   if not A.panel then return end
   g:rect(l.chrome_left,l.panel_top,l.chrome_right-l.chrome_left,l.dock-l.panel_top,{fill=true,color=0})
@@ -1859,7 +1858,7 @@ local function editor_chrome(ctx,g,l)
     do
       if A.panel=="settings" then
         icon(g,labels[i-4],cx-10,r.y+5)
-        local label=({"Focus","Screen","Type >","Keyb. >","More >"})[i-4]
+        local label=({"Focus","Screen","Type","Keyb.","More"})[i-4]
         g:text(cx,r.y+43,label,{font=ui,align="center",valign="middle"})
       else g:text(r.x+12,r.y+26,labels[i-4],{font=A.ui_medium,valign="middle"}) end
     end
@@ -2048,8 +2047,8 @@ function M.draw(ctx,g)
       g:text_box(32,top+(row-1)*48+2,ctx.screen.width-64,44,A.enabled_names[i] or "Add more...",{font=small,valign="middle",overflow="ellipsis",color=chosen and 0 or 15})
     end
     if total>per then
-      g:text(32,top+per*48+24,"< Prev",{font=small,valign="middle"})
-      g:text(ctx.screen.width-32,top+per*48+24,"Next >",{font=small,align="right",valign="middle"})
+      g:text(32,top+per*48+24,"Prev",{font=small,valign="middle"})
+      g:text(ctx.screen.width-32,top+per*48+24,"Next",{font=small,align="right",valign="middle"})
     end
   end
   if A.close_modal then

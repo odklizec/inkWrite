@@ -43,35 +43,35 @@ function M.new(hooks,small,title,dependencies)
     rows={}
     if u.page=='main'then
       rows={{label='Sync this document',action='sync',primary=true},
-        {label='Browse remote documents >',action='browse'},
-        {label='Version history: current document >',action='current_history'},
-        {label='Review current document versions >',action='review'},
-        {label=(status.connected or status.busy or status.user_code)and (ctx.state.github_sync_remember==true and 'Disconnect for now'or 'Disconnect')or 'Connect...',action='connect'},
-        {label='Settings >',action='settings'},
-        {label='Help >',action='help'}}
+        {label='Browse remote documents...',action='browse'},
+        {label='Version history: current document...',action='current_history'},
+        {label='Review current document versions',action='review'},
+        {label=(status.connected or status.busy or status.user_code)and (ctx.state.github_sync_remember==true and 'Disconnect for now'or 'Disconnect')or 'Connect',action='connect'},
+        {label='Settings...',action='settings'},
+        {label='Help...',action='help'}}
     elseif u.page=='settings'then
       rows={{label='GitHub sync: '..(ctx.state.github_sync_enabled==true and 'On'or 'Off'),action='toggle'},
-        {label='Automatic uploads: '..(ctx.state.github_sync_auto==true and 'On'or 'Off')..' >',action='auto_settings'}}
-      rows[#rows+1]={label=ctx.state.github_sync_remember==true and 'Forget saved connection'or 'Remember connection on this device...',action='remember'}
+        {label='Automatic uploads: '..(ctx.state.github_sync_auto==true and 'On'or 'Off')..'...',action='auto_settings'}}
+      rows[#rows+1]={label=ctx.state.github_sync_remember==true and 'Forget saved connection'or 'Remember connection on this device',action='remember'}
       if ctx.state.github_sync_remember==true and status.connected and status.remember_error=='connection_write_failed'then
         rows[#rows+1]={label='Retry saving connection',action='retry_remember'}
       end
-      if manager then rows[#rows+1]={label='Set up or change repository >',action='setup_open'}end
+      if manager then rows[#rows+1]={label='Set up or change repository...',action='setup_open'}end
     elseif u.page=='help'then
-      rows={{label='Setup instructions >',action='setup_help'},{label='How to revoke access >',action='revoke'}}
+      rows={{label='Setup instructions',action='setup_help'},{label='How to revoke access',action='revoke'}}
     elseif u.page=='auto'then
       rows={{label=ctx.state.github_sync_auto==true and 'Turn automatic uploads Off'or 'Enable automatic uploads',action='auto_toggle'},
         {label='Upload delay: '..((ctx.state.github_sync_delay==15 or ctx.state.github_sync_delay==60)and ctx.state.github_sync_delay or 30)..' seconds',action='auto_delay'},
         {label='Retry pending uploads',action='auto_retry'},
         {label='Clear upload queue',action='auto_clear'}}
-      for _,v in ipairs(auto.items)do rows[#rows+1]={label=(v.held and 'Review: 'or 'Pending: ')..v.name..(v.reason=='conflict'and ' >'or ''),action=v.reason=='conflict'and 'review'or 'auto_info',file=v}end
+      for _,v in ipairs(auto.items)do rows[#rows+1]={label=(v.held and 'Review: 'or 'Pending: ')..v.name,action=v.reason=='conflict'and 'review'or 'auto_info',file=v}end
     elseif u.page=='remote'then
       rows[#rows+1]={label='Refresh remote folder',action='browse'}
-      for _,r in ipairs(s.rows)do rows[#rows+1]={label=r.name..' >',action='select',file=r}end
+      for _,r in ipairs(s.rows)do rows[#rows+1]={label=r.name..'...',action='select',file=r}end
     elseif u.page=='confirm'then
       rows={{label='Cancel',action='back'}}
       rows[#rows+1]={label='Download as local copy',action='download',file=u.selected}
-      rows[#rows+1]={label='Version history >',action='file_history',file=u.selected}
+      rows[#rows+1]={label='Version history...',action='file_history',file=u.selected}
     elseif u.page=='history'then
       rows[#rows+1]={label='Refresh latest history',action='history_refresh'}
       local h=s.history
@@ -79,21 +79,21 @@ function M.new(hooks,small,title,dependencies)
         if h.page>1 then rows[#rows+1]={label='Newer versions',action='history_prev'}end
         if h.more then rows[#rows+1]={label='Older versions',action='history_next'}end
         for _,r in ipairs(h.rows)do
-          rows[#rows+1]={label=r.date..' '..r.sha:sub(1,7)..' '..r.summary..' >',action='version',file=r}
+          rows[#rows+1]={label=r.date..' '..r.sha:sub(1,7)..' '..r.summary,action='version',file=r}
         end
       end
     elseif u.page=='version'then
       rows={{label='Cancel',action='back'}}
       rows[#rows+1]={label='Restore as new local copy',action='restore_version',file=u.version}
     elseif u.page=='review'then
-      if s.review.remote.exists then rows[#rows+1]={label='Use GitHub version locally...',action='choose_local'}end
-      rows[#rows+1]={label='Keep local version on GitHub...',action='choose_github'}
+      if s.review.remote.exists then rows[#rows+1]={label='Use GitHub version locally',action='choose_local'}end
+      rows[#rows+1]={label='Keep local version on GitHub',action='choose_github'}
       rows[#rows+1]={label='Refresh both versions',action='review',file={name=s.review.name}}
     elseif u.page=='resolve_local'or u.page=='resolve_github'then
       rows={{label='Cancel',action='back'},
         {label=u.page=='resolve_local'and 'Replace local version'or 'Overwrite GitHub version',action=u.page=='resolve_local'and 'resolve_local'or 'resolve_github'}}
     elseif u.page=='conflict'then
-      rows={{label='Cancel',action='back'},{label='Review both versions >',action='review'}}
+      rows={{label='Cancel',action='back'},{label='Review both versions',action='review'}}
       rows[#rows+1]={label='Upload local as NEW remote file',action='new'}
       if s.conflict and s.conflict.sha then rows[#rows+1]={label='Download remote as local copy',action='download',file=s.conflict}end
     elseif u.page=='update'then
@@ -456,7 +456,7 @@ function M.new(hooks,small,title,dependencies)
     if l.panes then
       local reader=self.comparison.readers[self.comparison.active]
       local width=(l.touch_right-l.touch_left)//4
-      local labels={'Back','Actions >',reader.page>1 and 'Prev',reader.more and 'Next'}
+      local labels={'Back','Actions',reader.page>1 and 'Prev',reader.more and 'Next'}
       for i,label in ipairs(labels)do
         if label then g:text(l.touch_left+(2*i-1)*width//2,fy,label,{font=small,color=15,align='center',valign='middle'})end
       end

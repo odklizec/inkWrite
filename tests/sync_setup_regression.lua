@@ -119,7 +119,7 @@ h.ctx.screen={width=480,height=800};h.ctx.input={};local font={line_height=24,me
 local ui=UI.new({},font,font,{setup=manager,primitives=primitives});ui:open(h.ctx)
 check(ui.setup.active and ui.setup.fields.client_id==''and h.calls==0,'fresh setup presents empty public fields without network')
 local drawing=false;local labels={};local g={clear=function()end,text=function(_,_,_,t)labels[t]=true end,text_box=function(_,_,_,_,_,t)labels[t]=true end,rect=function()end,line=function()end}
-ui:draw(h.ctx,g);check(labels['Sign in and choose repository >']and not labels['odklizec/inkwrite-docs / main'],'fresh setup does not advertise owner repo')
+ui:draw(h.ctx,g);check(labels['Sign in and choose repository']and not labels['odklizec/inkwrite-docs / main'],'fresh setup does not advertise owner repo')
 ui:input(h.ctx,{type='key',key='back',phase='up'});check(not ui.active,'Back exits fresh setup')
 -- Whole UI flow uses actual Auth and Session, no token crosses the view boundary.
 h,sd=host();manager=Setup.new(h.ctx,{primitives=primitives});h.ctx.screen={width=480,height=800};h.ctx.input={}
@@ -162,7 +162,7 @@ assert(manager:save(c));c.scope.branch='drafts';assert(manager:save(c))
 ui=UI.new({},font,font,{setup=manager,primitives=primitives});ui:open(h.ctx)
 press(6);press(4);press(6)
 labels={};ui:draw(h.ctx,g)
-check(ui.setup.page=='setup_profiles'and labels['example/docs / main >']and not labels['example/docs / drafts >'],'saved repositories list only other destinations')
+check(ui.setup.page=='setup_profiles'and labels['example/docs / main']and not labels['example/docs / drafts'],'saved repositories list only other destinations')
 press(1);press(1)
 check(ui.setup.page=='setup_profiles'and manager.config.scope.branch=='drafts'and h.calls==0,'cancel returns to saved repositories without changing setup or signing in')
 press(1);h.ctx.state.github_sync_auto=true;press(2)
