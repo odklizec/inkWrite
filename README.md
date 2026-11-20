@@ -1,6 +1,6 @@
 # inkWrite
 
-Version **1.0.23** includes **split screen**: Settings > More > Split screen or
+Version **1.0.25** includes **split screen**: Settings > More > Split screen or
 **Ctrl+Shift+P**. Choose top/bottom or left/right and 1:1, 2:1 or 1:2. Both panes
 remain visible in focus mode. Direction defaults to **Auto: follow screen**:
 portrait uses top/bottom; landscape uses left/right. Choosing either fixed
@@ -10,7 +10,7 @@ tap changes the active pane; New/Open/Save target it. Save all / Discard all on
 exit include hidden documents. See the [implementation and device acceptance
 plan](docs/SPLIT-SCREEN-PLAN.md). Desktop and native Pro/Classic simulator
 checks pass; the owner reported hardware testing good on 20 November 2026.
-See [1.0.23 release notes](docs/RELEASE-1.0.23.md).
+See [1.0.25 release notes](docs/RELEASE-1.0.25.md).
 
 For Studio imports use the corrected exporter described in
 [Studio project layout](docs/STUDIO-PROJECT-LAYOUT.md). Desktop tests and the
@@ -36,7 +36,7 @@ A quiet writing and journaling app for Xteink X4Pro and X4Classic. Requires comp
 
 ## GitHub setup
 
-Start with the [illustrated beginner’s guide to connecting inkWrite to GitHub](docs/GITHUB-SETUP-GUIDE.md).
+Start with the [illustrated beginner’s guide to connecting inkWrite to GitHub](docs/GITHUB-SETUP-GUIDE.md). The [self-contained HTML guide](docs/gtihub_guide/GITHUB-SETUP-GUIDE.html) also preserves its screenshots inside a Studio backup.
 
 Open **Settings > More > GitHub sync > GitHub setup / change repository**. New installs open setup automatically. Enter your own GitHub App's public Client ID, numeric App ID and GitHub login, approve the device code (or scan its QR), then choose a private repository and branch. Save the verified destination. No secrets or source edits are needed. Existing owner setup is retained.
 

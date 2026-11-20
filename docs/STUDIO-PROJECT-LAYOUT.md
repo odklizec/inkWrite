@@ -1,3 +1,11 @@
+Release 1.0.25 includes 25 runtime Lua modules. Studio source files are UTF-8
+text: binary documentation screenshots stay in the GitHub repository and are
+not newly imported into project-files/. Existing Studio documentation entries
+are retained verbatim. The preserved docs/gtihub_guide HTML guide embeds
+its illustrations and remains readable independently. XIC icons and the store
+cover retain their proper asset/presentation paths. The exporter rejects any
+remaining non-UTF-8 source instead of silently damaging it during import.
+
 Canonical project is now the original **inkWrite**, ID bc6ebcee-26df-4d19-b814-b9e488605d51. Phase 0 is superseded. The exporter inherits the template project name and preserves its cover/assets and identity. Historical development details below are retained as history.
 
 Build 1.0.20 adds domain/sync_setup.lua and domain/sync_setup_ui.lua: **twenty-two** executable Lua files. Public setup and private per-profile runtime records are separate; no device state or credentials are packaged.

@@ -31,15 +31,29 @@ def cloud_path(name):
 
 def build(repo, template, archive, stage):
     tracked = subprocess.check_output(['git', 'ls-files'], cwd=repo, text=True).splitlines()
-    names = [n for n in tracked if not n.startswith(('assets/', 'artwork/', '.'))]
+    # Studio sourceFiles are UTF-8 text. Repository screenshots must not be
+    # decoded as source and exported again with replacement characters.
+    binary_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.xic'}
+    names = [n for n in tracked if not n.startswith(('assets/', 'artwork/', '.'))
+             and Path(n).suffix.lower() not in binary_extensions]
     # Also include this exporter while preparing an uncommitted repair.
     for name in ('scripts/build_studio_snapshot.py', 'docs/STUDIO-PROJECT-LAYOUT.md'):
         if (repo / name).exists() and name not in names:
             names.append(name)
     contents = {cloud_path(n): (repo / n).read_bytes() for n in names}
     manifest = json.loads(contents['manifest.json'])
+    preserved = 0
     with zipfile.ZipFile(template) as original:
-        template_project = json.loads(original.read('xtapp-studio/project.json'))['project']
+        template_meta = json.loads(original.read('xtapp-studio/project.json'))
+        template_project = template_meta['project']
+        # Existing Studio documentation entries are already text. Retain them
+        # verbatim rather than deleting cloud-only files during an app update.
+        for name in template_meta.get('sourceFiles', []):
+            if name.startswith('docs/images/') and name not in contents:
+                contents[name] = original.read('project-files/' + name)
+                preserved += 1
+    for name, data in contents.items():
+        data.decode('utf-8')  # Fail rather than silently corrupt a binary file.
     manifest['display_name'] = template_project['name']
     contents['manifest.json'] = (json.dumps(manifest, indent=2) + '\n').encode()
     layout = {cloud_path(n): n for n in names if cloud_path(n) != n}
@@ -54,7 +68,7 @@ def build(repo, template, archive, stage):
             assert name in {'domain/sync_transport.lua', 'domain/sync_session.lua'}, name
         for module in re.findall(r'require\(["\']([^"\']+)["\']\)', text):
             assert module.replace('.', '/') + '.lua' in active_lua, (name, module)
-    assert len(contents) == len(names) + 1, 'cloud path collision'
+    assert len(contents) == len(names) + preserved + 1, 'cloud path collision'
     with zipfile.ZipFile(template) as original:
         meta = json.loads(original.read('xtapp-studio/project.json'))
         meta['project']['name'] = manifest['display_name']
