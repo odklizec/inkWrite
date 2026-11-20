@@ -152,7 +152,7 @@ local badge
 local g=setmetatable({text=function(_,x,y,t,o)if t=='GitHub !'then badge={x=x,y=y}end end},{__index=function()return function()end end})
 App.draw(h.ctx,g);check(badge~=nil,'writing screen displays a conflict badge without replacing local Saved status')
 App.input(h.ctx,{type='pointer',phase='up',gesture='tap',x=badge.x,y=badge.y});h:read(NEW,F.NEW);h.a.sync:tick(h.ctx)
-check(h.a.sync.active and h.a.sync.page=='review','badge tap opens actual two-version review')
+check(h.a.sync.active and h.a.sync.page=='compare','badge tap opens actual two-version review')
 h.s:close(h.ctx);h.a.sync.active=false;App.input(h.ctx,{type='key',source='keyboard',phase='down',code='KeyF',mods={ctrl=true,shift=true}});badge=nil;App.draw(h.ctx,g)
 check(badge~=nil,'focus mode retains the GitHub attention indicator')
 h.a.close_modal={dirty=false};App.input(h.ctx,{type='pointer',phase='up',gesture='tap',x=badge.x,y=badge.y})

@@ -2,7 +2,11 @@
 local Layout=require('domain.layout')
 local M={}
 function M.new(review,side)
- local bytes=side=='github'and review.remote.bytes or review.file.bytes
+ local bytes=review.file.bytes
+ if side=='github'then
+  if not review.remote.exists then return nil end
+  bytes=review.remote.bytes
+ end
  if type(bytes)~='string'then return nil end
  local buffer={size=#bytes}
  function buffer:slice(a,z)return bytes:sub(a+1,z)end

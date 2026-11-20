@@ -24,9 +24,11 @@ Selecting Sync, Browse or Version history automatically tries to connect if need
 
 **Version history** now lists recent GitHub commits for the current document or a file selected through Browse remote documents. Choose **Older versions** / **Newer versions**, select an entry, then **Restore as new local copy**. The original document stays open; use Open to inspect the new `restore-###` file. See [Phase 4 history and restore](docs/GITHUB-SYNC-PHASE4.md).
 
-Optional **Automatic uploads** are available in GitHub sync and start **Off**. Enable them to queue successful saves, then return to writing. The app waits for a configurable 15/30/60-second delay (30 by default) and ten seconds without input before uploading. Typing interrupts transfers; conflicts require manual review. The bounded queue survives normal closing and supports controlled retries. It never downloads automatically or opens browser approval in the background. See [Phase 5 and device test steps](docs/GITHUB-SYNC-PHASE5.md).
+**GitHub sync > Settings** groups the sync switch, automatic uploads, saved login and repository setup. **GitHub sync > Help** contains setup and access-revocation instructions.
 
-A **GitHub !** badge appears in the writing screen when a known conflict or held upload needs attention, including focus mode. Tap it (or press Ctrl+G while it is visible) to review the affected file. **Read local version** and **Read GitHub version** open read-only pages. You can then explicitly replace the local version or overwrite GitHub, with a verified local backup and a fresh revision check first. See [conflict review and replacement](docs/GITHUB-CONFLICT-REVIEW-1.0.18.md).
+Optional **Automatic uploads** start **Off**. Enable them to queue successful saves, then return to writing. The app waits for a configurable 15/30/60-second delay (30 by default) and ten seconds without input before uploading. Typing interrupts transfers; conflicts require manual review. The bounded queue survives normal closing and supports controlled retries. It never downloads automatically or opens browser approval in the background. See [Phase 5 and device test steps](docs/GITHUB-SYNC-PHASE5.md).
+
+Open **Review current document versions** from GitHub sync, or tap the **GitHub !** badge when a file needs attention. Ctrl+G also opens the flagged file's review. The read-only comparison shows Local above GitHub in portrait and Local beside GitHub in landscape. Swipe inside either pane, or use Left/Right to select a pane and Up/Down to page it. Use **Actions** (OK or Enter) to choose a version. Replacing a version still requires confirmation, a verified local backup and a fresh revision check. See [conflict review and replacement](docs/GITHUB-CONFLICT-REVIEW-1.0.18.md).
 
 Build 1.0.19 fixes touch feedback: single taps immediately show the new caret and double/triple taps immediately show word/sentence selection, without opening Settings or the virtual keyboard. Typing still uses the existing coalesced redraw path.
 
@@ -38,7 +40,9 @@ A quiet writing and journaling app for Xteink X4Pro and X4Classic. Requires comp
 
 Start with the [illustrated beginner’s guide to connecting inkWrite to GitHub](docs/GITHUB-SETUP-GUIDE.md). The [self-contained HTML guide](docs/gtihub_guide/GITHUB-SETUP-GUIDE.html) also preserves its screenshots inside a Studio backup.
 
-Open **Settings > More > GitHub sync > GitHub setup / change repository**. New installs open setup automatically. Enter your own GitHub App's public Client ID, numeric App ID and GitHub login, approve the device code (or scan its QR), then choose a private repository and branch. Save the verified destination. No secrets or source edits are needed. Existing owner setup is retained.
+Open **Settings > More > GitHub sync > Settings > Set up or change repository**. New installs open setup automatically. Enter your own GitHub App's public Client ID, numeric App ID and GitHub login, approve the device code (or scan its QR), then choose a private repository and branch. Save the verified destination. No secrets or source edits are needed. Existing owner setup is retained.
+
+**Switch to a saved repository** appears when another setup is saved on the device. It selects a previously configured GitHub App, account, repository and branch without re-entering those settings. Each setup keeps its own sync records and pending uploads. After switching, use **Connect** to verify access. Automatic uploads start **Off** for the newly selected setup.
 
 Each saved destination keeps separate sync records, pending uploads and remembered credentials. Switching leaves automatic uploads Off and asks for Remember consent again. Four additional setups plus the existing owner setup can be retained. [Setup instructions and device checks](docs/GITHUB-GENERAL-SETUP-1.0.20.md).
 

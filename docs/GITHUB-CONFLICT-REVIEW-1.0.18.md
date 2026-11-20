@@ -6,7 +6,7 @@ A **GitHub !** badge in the writing header means a known conflict or held upload
 
 The indicator reports information discovered by a sync attempt; it is not continuous monitoring of GitHub. If GitHub changed but no check has run yet, open manual Sync/Review to discover it.
 
-Opening review saves current local edits successfully before fetching GitHub. The review screen shows the filename and byte sizes. **Read local version** and **Read GitHub version** display separate read-only source pages. Prev/Next and direction keys move through the text; Back returns to the choices. These viewers do not edit the document, merge it, or show a highlighted diff.
+Opening review saves current local edits successfully before fetching GitHub. The comparison shows both read-only sources, stacked in portrait and side by side in landscape. Swipe inside a pane to page it. With the Classic buttons or a keyboard, use Left/Right to choose a pane and Up/Down to page it. **Actions** opens the version choices and byte counts. Back takes you from Actions to the same comparison pages, then to the menu that opened the review.
 
 ## Keep one version
 
