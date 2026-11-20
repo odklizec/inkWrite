@@ -1,3 +1,12 @@
+## Illustrated setup guide QR 1.0.28 - 2026-11-20
+
+The public guide is hosted separately from the private inkWrite repository. The
+QR opens from GitHub Help and from first-time setup, with the URL printed on
+screen. The reader draws the code offline. Regenerate the static code with
+`python scripts/build_approval_qr.py --guide-url https://inkwrite-guide.twinwalnut.chatgpt.site`.
+The hosted page uses the self-contained HTML at
+`docs/github_guide/GITHUB-SETUP-GUIDE.html`.
+
 ## Menu and GitHub review update 1.0.26 - 2026-11-20
 
 InkWrite menu navigation and the split-screen GitHub comparison are saved in the original Studio project. Save and verify future updates in the original InkApp Studio cloud project first. Mirror the verified save to GitHub with a direct fast-forward commit. The owner requested a workflow without pull requests.

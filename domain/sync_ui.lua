@@ -2,6 +2,7 @@ local Session=require('domain.sync_session')
 local Config=require('domain.sync_config')
 local Automatic=require('domain.sync_auto')
 local ApprovalQR=require('domain.approval_qr')
+local GuideQR=require('domain.github_guide_qr')
 local ReviewText=require('domain.sync_review')
 local Panes=require('domain.pane_geometry')
 local SetupUI=require('domain.sync_setup_ui')
@@ -58,7 +59,8 @@ function M.new(hooks,small,title,dependencies)
       end
       if manager then rows[#rows+1]={label='Set up or change repository...',action='setup_open'}end
     elseif u.page=='help'then
-      rows={{label='Setup instructions',action='setup_help'},{label='How to revoke access',action='revoke'}}
+      rows={{label='Setup instructions',action='setup_help'},{label='How to revoke access',action='revoke'},
+        {label='Illustrated setup guide',action='setup_guide'}}
     elseif u.page=='auto'then
       rows={{label=ctx.state.github_sync_auto==true and 'Turn automatic uploads Off'or 'Enable automatic uploads',action='auto_toggle'},
         {label='Upload delay: '..((ctx.state.github_sync_delay==15 or ctx.state.github_sync_delay==60)and ctx.state.github_sync_delay or 30)..' seconds',action='auto_delay'},
@@ -159,6 +161,12 @@ function M.new(hooks,small,title,dependencies)
     if wizard and wizard.active then
       rows,header,status=wizard:view(ctx);approving=status.user_code~=nil;status_lines=1
     end
+    local page_name=wizard and wizard.active and wizard.page or u.page
+    local guide=page_name=='setup_guide'
+    if guide then
+      rows={};header={'Illustrated setup guide',GuideQR.url,'Scan with your phone camera.'}
+      approving=false;status_lines=2
+    end
     local o=ctx.screen.occlusion or {};local x,y=(o.left or 0)+16,(o.top or 0)+12
     local w=ctx.screen.width-(o.right or 0)-x-16
     local bottom=ctx.screen.height-(o.bottom or 0)-18
@@ -167,20 +175,22 @@ function M.new(hooks,small,title,dependencies)
     if u.page=='compare'then notice_lines=0;status_lines=0 end
     if u.page=='setup_help'then notice_lines=math.max(0,(bottom-48-y-title.line_height-8)//(small.line_height+4)-2) end
     if u.page=='resolve_local'or u.page=='resolve_github'then notice_lines=4 end
+    if guide then notice_lines=1 end
     local line=small.line_height+4
     local rh=math.max(44,small.line_height+12)
-    if wizard and wizard.active then
+    if wizard and wizard.active and not guide then
       local room=bottom-48-(y+title.line_height+8)-line*(1+status_lines)-rh
       notice_lines=math.max(0,math.min(notice_lines,room//line))
     end
     local top=y+title.line_height+8+line*(1+status_lines+notice_lines)
     local qr
-    if approving then
-      local available=math.min(w,bottom-top-48-rh-10,222)
-      local scale=math.floor(available/ApprovalQR.size)
+    local qr_data=approving and ApprovalQR or guide and GuideQR
+    if qr_data then
+      local available=math.min(w,bottom-top-48-(approving and rh or 0)-10,222)
+      local scale=math.floor(available/qr_data.size)
       if scale>=2 then
-        local size=ApprovalQR.size*scale
-        qr={x=x+(w-size)//2,y=top+2,size=size,scale=scale}
+        local size=qr_data.size*scale
+        qr={x=x+(w-size)//2,y=top+2,size=size,scale=scale,rects=qr_data.rects}
         top=qr.y+size+8
       end
     end
@@ -253,7 +263,7 @@ function M.new(hooks,small,title,dependencies)
   local function perform(ctx,r)
     if r.action=='setup_open'then auto:interrupt(ctx);u.wizard_focus=u.focus;wizard:open();u.focus=1
     elseif r.action=='cancel_auth'then u.pending=nil;s:disconnect(ctx);u.focus=1
-    elseif r.action=='settings'or r.action=='help'or r.action=='setup_help'or r.action=='revoke'then enter(r.action)
+    elseif r.action=='settings'or r.action=='help'or r.action=='setup_help'or r.action=='setup_guide'or r.action=='revoke'then enter(r.action)
     elseif r.action=='review'then
       s:review_document(ctx,r.file and r.file.name)
       if u.page=='conflict'and not s.conflict then up() end
@@ -425,7 +435,7 @@ function M.new(hooks,small,title,dependencies)
     if l.qr then
       local q=l.qr
       g:rect(q.x,q.y,q.size,q.size,{color=0,fill=true})
-      for _,r in ipairs(ApprovalQR.rects)do
+      for _,r in ipairs(q.rects)do
         g:rect(q.x+r[1]*q.scale,q.y+r[2]*q.scale,r[3]*q.scale,q.scale,{color=15,fill=true})
       end
     end

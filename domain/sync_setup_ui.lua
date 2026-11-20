@@ -72,7 +72,7 @@ function M.new(manager,changed,dependencies)
       ctx.input:text({title=r.title,text=self.fields[field],max_bytes=field=='login'and 39 or field=='app_id'and 10 or 64},function(c,text)
         if text and w.active then w.fields[field]=text;w.notice='';c:invalidate()end
       end)
-    elseif r.action=='setup_help'or r.action=='setup_profiles'then enter(r.action,focus)
+    elseif r.action=='setup_help'or r.action=='setup_guide'or r.action=='setup_profiles'then enter(r.action,focus)
     elseif r.action=='setup_signin'then
       stop();local p=d.primitives or Primitives.new(ctx)
       local public={client_id=self.fields.client_id,app_id=tonumber(self.fields.app_id),login=self.fields.login}
@@ -137,6 +137,7 @@ function M.new(manager,changed,dependencies)
         end
       end
       if manager.error then rows={{label='Setup instructions',action='setup_help'}}end
+      rows[#rows+1]={label='Illustrated setup guide',action='setup_guide'}
     elseif self.page=='setup_profiles'then
       header={'Saved repositories','Choose a repository and branch',''}
       for i,v in ipairs(manager.profiles)do
@@ -163,7 +164,9 @@ function M.new(manager,changed,dependencies)
           device_flow_disabled='Enable device flow in GitHub App settings.',incorrect_client_credentials='Check the public Client ID.',no_network='No network. Reconnect and retry.',repository_limit='Choose an App installation with at most 100 repositories.'}
         header[3]=errors[status.reason]or 'Sign-in failed or expired. Go Back and retry.'
       end
-    else header[2]='Checking GitHub...';header[3]='Local documents are unchanged.'end
+    elseif self.page=='setup_wait'then
+      header[2]='Checking GitHub...';header[3]='Local documents are unchanged.'
+    end
     return rows,header,status
   end
   return w
