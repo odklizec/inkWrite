@@ -1,3 +1,14 @@
+## Native font settings 1.0.32 - 2026-11-21
+
+Settings > Type opens the device’s Fonts page where supported. Older
+firmware retains the manual instructions. The handoff saves dirty panes
+and checkpoints the active document, caret and typography settings first.
+The app stays open if a save fails. Minimum API remains 2.26.
+
+The owner confirmed the picker worked. Studio Classic and Pro previews
+opened the Fonts page and returned to writing. Desktop regressions cover
+older firmware, split-pane saves, and save and launch failures.
+
 ## Setup instructions and firmware naming 1.0.29 - 2026-11-21
 
 Setup instructions is the first GitHub Help item and opens the same QR page

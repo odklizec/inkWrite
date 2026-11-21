@@ -5,6 +5,7 @@ function M.new(options)
   options=options or {}
   local h={files=options.files or {['alpha.md']='Alpha original.\r\n',['bravo.md']='Bravo original.\r\n'},private=options.private or {},timers={},public_writes=0,private_writes=0,drawing=false}
   local c={state=options.state or {last='alpha.md'},time=0,screen={width=options.width or 480,height=options.height or 800,orientation='portrait',occlusion={left=0,right=0,top=0,bottom=0}},clock={},input={},budget={}}
+  c.system=options.system
   h.ctx=c
   local function outside()assert(not h.drawing,'IO or layout preparation during draw')end
   local f={line_height=options.line or 24,measure=function(_,t)return (utf8.len(t)or 0)*10 end};h.font=f

@@ -76,7 +76,9 @@ Fast taps use the firmware's native double-tap event and captured touch timestam
 
 Settings → Type shows the actual font in use and offers size, line spacing and margins. A sample of up to five lines previews changes; controls stay anchored above the bottom bar. Fewer sample lines appear when space is constrained. Typography changes appearance only, not saved file contents.
 
-Choose your font in **Ink App → Settings → Font**, then close and reopen inkWrite. Place `.ttf` files in the SD card fonts folder if needed. inkWrite requests the chosen font for writing and controls using the current host API; the actual returned font name appears in Typography. The size choices are 20/24/28/30/32/36 px. If the host cannot use the selected file, it may return the reader font or a built-in fallback; the latter is shown as **System fallback**. Glyph coverage depends on the font. The host owns font memory and caching; inkWrite uses six size choices and opens sizes outside drawing.
+On firmware with Ink App API 2.27 or later, select the **Font** row to open the device’s font picker. inkWrite saves any unsaved documents first and stays open if a save fails. Press Back from the picker to return to your writing with the selected font. On older firmware, use **Ink App → Settings → Font**, then reopen inkWrite.
+
+Place `.ttf` files in the SD card’s `fonts/` folder if needed. inkWrite uses the device’s chosen font for writing and controls. If the host cannot use that file, it may use the reader’s font or a built-in font. Typography displays **System fallback** when a built-in font is in use. The saved size choices are 20, 24, 28, 30, 32 and 36 px.
 
 **Settings → Screen** or **Ctrl+Shift+R** toggles portrait and landscape. The choice is remembered for the next open; it applies only to inkWrite and does not change device settings.
 

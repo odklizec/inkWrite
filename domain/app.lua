@@ -7,7 +7,7 @@ local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
 local SyncUI=require('domain.sync_ui')
-local M={VERSION="1.0.29"}
+local M={VERSION="1.0.32"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 -- Typing pacing. None of these shorten the panel's own frame time; they keep
@@ -19,6 +19,7 @@ local QUIET_MS=700             -- a gap long enough to accept an SD write
 local SAVE_FORCE_MS=120000     -- never postpone a public save beyond this
 local STATS_FORCE_MS=180000    -- bound what a long unbroken session can lose
 local FONT_SIZES={20,24,28,30,32,36}
+local FONT_SETTINGS="settings.font"
 local function preferred_font(ctx,px)
   local f=ctx.fonts.size and ctx.fonts:size(px)
   if f then return f end
@@ -139,7 +140,7 @@ local function geometry(ctx,editor,slot)
   if A.view=="typography" then
     l.type_controls={};local cs=l.type_controls
     local horizontal=ctx.screen.width>ctx.screen.height
-    local controls_height=horizontal and 140 or 270
+    local controls_height=horizontal and 140 or (A.can_open_font_settings and 206 or 270)
     local base=l.dock-controls_height-12
     l.type_notice=A.message or (A.blocked and "Files are protected") or (A.editor.save_failed and "Save failed")
     l.footer=false
@@ -149,7 +150,8 @@ local function geometry(ctx,editor,slot)
     l.preview={x=o.left+A.margin,y=l.body,w=ctx.screen.width-o.right-o.left-2*A.margin,count=count,h=height}
     l.type_notice_y=base-60
     local half=(l.w-16)//2
-    cs[1]={x=l.x,y=base+(horizontal and 20 or 0),w=horizontal and half or l.w,h=44,kind="font",label="Font: "..(A.font_name=="" and "System" or A.font_name)}
+    cs[1]={x=l.x,y=base+(horizontal and 20 or 0),w=horizontal and half or l.w,h=44,kind="font",
+      label="Font: "..A.font_name..(A.can_open_font_settings and "  >" or "")}
     local sizes=FONT_SIZES
     local cell=(horizontal and half or l.w)//(#sizes+2)
     local sx=horizontal and l.x+half+16 or l.x;local sy=base+(horizontal and 20 or 80)
@@ -160,7 +162,9 @@ local function geometry(ctx,editor,slot)
     for group,values in ipairs({{4,8,14},{24,40,56}}) do
       for i,value in ipairs(values) do cs[#cs+1]={x=l.x+(group-1)*(half+16)+(i-1)*width,y=gy,w=width,h=44,kind=group==1 and "spacing" or "margin",value=value,label=({"S","M","L"})[i],selected=(group==1 and A.spacing or A.margin)==value} end
     end
-    cs[#cs+1]={x=horizontal and l.right-44 or l.x,y=horizontal and o.top+2 or base+226,w=horizontal and 44 or l.w,h=horizontal and 40 or 44,kind="help",label=horizontal and "?" or "Font settings"}
+    if not A.can_open_font_settings then
+      cs[#cs+1]={x=horizontal and l.right-44 or l.x,y=horizontal and o.top+2 or base+226,w=horizontal and 44 or l.w,h=horizontal and 40 or 44,kind="help",label=horizontal and "?" or "Font settings"}
+    end
     l.type_labels={{x=sx,y=sy-24,text="Text size"},{x=l.x,y=gy-24,text="Line spacing"},{x=l.x+half+16,y=gy-24,text="Margins"}}
   end
   return l
@@ -410,6 +414,13 @@ local function save(ctx,editor)
   A.message=nil;ctx:invalidate()
   return true
 end
+local function save_dirty_documents(ctx)
+  for slot=1,2 do
+    local editor=A.workspace.sessions[slot]
+    if editor and editor.dirty and not save(ctx,editor) then return false end
+  end
+  return true
+end
 local function close_request(ctx)
   cancel_navigation();cancel_redraw();A.keyboard:reset();A.panel=nil;A.action_focus=nil
   A.close_modal={choice=1,dirty=Workspace.dirty(A.workspace)};ctx:invalidate()
@@ -420,9 +431,7 @@ local function close_choice(ctx,i)
   if not modal.dirty then A.close_modal=nil;ctx:quit();return end
   A.close_modal=nil
   if i==2 then
-    for slot=1,2 do local editor=A.workspace.sessions[slot]
-      if editor and editor.dirty and not save(ctx,editor)then return end
-    end
+    if not save_dirty_documents(ctx) then return end
     Workspace.remember(ctx,A.workspace);ctx:quit()
   else
     for slot=1,2 do local editor=A.workspace.sessions[slot]
@@ -656,8 +665,32 @@ local function list_rows()
   if A.view=="fonts" then return A.font_names end
   return A.files
 end
-local function font_picker(ctx)
+local function font_help()
   enter_view("font_help");A.message=nil;A.help_page=1
+end
+local function font_picker(ctx)
+  if not A.can_open_font_settings then font_help();return end
+  if A.blocked then
+    message(ctx,"Recovery needs attention; existing files are protected")
+    return
+  end
+  -- Opening Fonts ends this session. Finish checked saves while the editor
+  -- can still display an error and let the user retry.
+  extend_budget(ctx)
+  if not save_dirty_documents(ctx) then return end
+  Workspace.remember(ctx,A.workspace)
+  ctx.state.last=A.editor.doc.name
+  ctx.state.cursor=A.editor.buffer.pos
+  local saved,state_ok=pcall(ctx.save_state,ctx)
+  if not saved or not state_ok then
+    message(ctx,"Could not save settings. Try again before opening Fonts.")
+    return
+  end
+  local called,result,err=pcall(ctx.system.open,ctx.system,FONT_SETTINGS)
+  if not called or err or result==false then
+    A.can_open_font_settings=false
+    message(ctx,"Could not open Fonts. Select Font for instructions.")
+  end
 end
 local function typography_command(ctx,i)
   A.message=nil
@@ -670,12 +703,13 @@ local function typography_command(ctx,i)
     choose_font(ctx,A.font_name,nextpx)
   elseif i==4 then A.spacing=A.spacing==4 and 8 or A.spacing==8 and 14 or 4;ctx.state.spacing=A.spacing
   elseif i==5 then A.margin=A.margin==24 and 40 or A.margin==40 and 56 or 24;ctx.state.margin=A.margin
-  elseif i==6 then font_picker(ctx) end
+  elseif i==6 then font_help() end
   ctx:invalidate()
 end
 local function type_control(ctx,c)
   A.message=nil
-  if c.kind=="font" or c.kind=="help" then font_picker(ctx)
+  if c.kind=="font" then font_picker(ctx)
+  elseif c.kind=="help" then font_help()
   elseif c.kind=="size" then
     local sizes=FONT_SIZES
     local value=c.value
@@ -801,6 +835,12 @@ end
 function M.load(ctx)
   extend_budget(ctx)
   A={view="editor",views={},focus=1,large=ctx.state.large==true,caps=false,editor=assert(Session.new("untitled-001.md","",nil,false,now(ctx)))}
+  -- The target is available to API 2.26 packages on firmware with API 2.27+.
+  local system=ctx.system
+  if system and system.can_open and system.open then
+    local ok,available=pcall(system.can_open,system,FONT_SETTINGS)
+    A.can_open_font_settings=ok and available==true
+  end
   A.workspace=Workspace.new();A.workspace.sessions[1]=A.editor
   A.timing={}
   for _,key in ipairs({"input","layout","draw","queue","save","compose"}) do A.timing[key]={last=0,max=0,n=0,sum=0} end
