@@ -7,7 +7,7 @@ local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
 local SyncUI=require('domain.sync_ui')
-local M={VERSION="1.0.28"}
+local M={VERSION="1.0.29"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 -- Typing pacing. None of these shorten the panel's own frame time; they keep
@@ -872,7 +872,7 @@ function M.load(ctx)
   local px=ctx.state.font_px
   if px==20 or px==24 or px==28 or px==30 or px==32 or px==36 then A.font_px=px end
   choose_font(ctx,"",A.font_px)
-  if not ctx.files or not ctx.input.listen then A.blocked=true; A.message="Update to Gancao firmware supporting XTApp API 2.11"; return end
+  if not ctx.files or not ctx.input.listen then A.blocked=true; A.message="Update to Licorice firmware supporting XTApp API 2.11"; return end
   local listened,e=ctx.input:listen({keyboard=true})
   if not listened then A.blocked=true; A.message="Keyboard listener failed: "..tostring(e); return end
   local restored,restore_error=Workspace.restore(ctx,now(ctx))

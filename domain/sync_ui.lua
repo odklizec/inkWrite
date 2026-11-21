@@ -59,8 +59,7 @@ function M.new(hooks,small,title,dependencies)
       end
       if manager then rows[#rows+1]={label='Set up or change repository...',action='setup_open'}end
     elseif u.page=='help'then
-      rows={{label='Setup instructions',action='setup_help'},{label='How to revoke access',action='revoke'},
-        {label='Illustrated setup guide',action='setup_guide'}}
+      rows={{label='Setup instructions',action='setup_guide'},{label='How to revoke access',action='revoke'}}
     elseif u.page=='auto'then
       rows={{label=ctx.state.github_sync_auto==true and 'Turn automatic uploads Off'or 'Enable automatic uploads',action='auto_toggle'},
         {label='Upload delay: '..((ctx.state.github_sync_delay==15 or ctx.state.github_sync_delay==60)and ctx.state.github_sync_delay or 30)..' seconds',action='auto_delay'},
@@ -137,9 +136,6 @@ function M.new(hooks,small,title,dependencies)
     end
     if u.page=='settings'then header[1]='Settings' end
     if u.page=='help'then header[1]='Help' end
-    if u.page=='setup_help'then
-      header={'Setup instructions','Your own GitHub App and private repository',SetupUI.instructions}
-    end
     if u.page=='confirm'then header[3]='Download: '..u.selected.name end
     if u.page=='history'then
       header[1]='History: '..(u.history_name or '')
@@ -164,16 +160,16 @@ function M.new(hooks,small,title,dependencies)
     local page_name=wizard and wizard.active and wizard.page or u.page
     local guide=page_name=='setup_guide'
     if guide then
-      rows={};header={'Illustrated setup guide',GuideQR.url,'Scan with your phone camera.'}
+      local address=GuideQR.url:gsub('(/blob/main/)','\n%1',1)
+      rows={};header={'Setup instructions',address,'Scan with your phone camera.'}
       approving=false;status_lines=2
     end
     local o=ctx.screen.occlusion or {};local x,y=(o.left or 0)+16,(o.top or 0)+12
     local w=ctx.screen.width-(o.right or 0)-x-16
     local bottom=ctx.screen.height-(o.bottom or 0)-18
     local notice_lines=(u.page=='remember'or u.page=='connect'or u.page=='auto')and (w>=640 and 3 or 4)or 2
-    if wizard and wizard.active then notice_lines=wizard.page=='setup_help'and 6 or (approving and 2 or 4) end
+    if wizard and wizard.active then notice_lines=approving and 2 or 4 end
     if u.page=='compare'then notice_lines=0;status_lines=0 end
-    if u.page=='setup_help'then notice_lines=math.max(0,(bottom-48-y-title.line_height-8)//(small.line_height+4)-2) end
     if u.page=='resolve_local'or u.page=='resolve_github'then notice_lines=4 end
     if guide then notice_lines=1 end
     local line=small.line_height+4
@@ -263,7 +259,7 @@ function M.new(hooks,small,title,dependencies)
   local function perform(ctx,r)
     if r.action=='setup_open'then auto:interrupt(ctx);u.wizard_focus=u.focus;wizard:open();u.focus=1
     elseif r.action=='cancel_auth'then u.pending=nil;s:disconnect(ctx);u.focus=1
-    elseif r.action=='settings'or r.action=='help'or r.action=='setup_help'or r.action=='setup_guide'or r.action=='revoke'then enter(r.action)
+    elseif r.action=='settings'or r.action=='help'or r.action=='setup_guide'or r.action=='revoke'then enter(r.action)
     elseif r.action=='review'then
       s:review_document(ctx,r.file and r.file.name)
       if u.page=='conflict'and not s.conflict then up() end

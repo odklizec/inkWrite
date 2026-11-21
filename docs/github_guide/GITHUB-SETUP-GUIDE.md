@@ -2,7 +2,7 @@
 
 The accompanying `GITHUB-SETUP-GUIDE.html` includes all four images. Open it in a browser for the illustrated guide.
 
-This guide walks you through your first connection and test upload in **inkWrite** on an Xteink X4 Classic or X4 Pro. Have your reader with inkWrite installed on Gancao firmware that supports XTApp API 2.26, Wi‑Fi on the reader, and a phone or computer with a web browser and internet access.
+This guide walks you through your first connection and test upload in **inkWrite** on an Xteink X4 Classic or X4 Pro. Have your reader with inkWrite installed on Licorice firmware that supports XTApp API 2.26, Wi‑Fi on the reader, and a phone or computer with a web browser and internet access.
 
 You’ll create a **private repository**, which is the place on GitHub where your writing will go. You’ll also register a **GitHub App**, which is a permission record that lets inkWrite use that repository. You already have the writing app on your reader. Registering the GitHub App happens entirely on the GitHub website.
 

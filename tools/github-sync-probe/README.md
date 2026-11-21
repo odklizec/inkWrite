@@ -15,7 +15,7 @@ reopen to repeat the sequence. Results are seven bounded in-memory summaries.
    task. Public echo services can change/rate-limit/strip headers; do not infer a
    device API failure from an unverified endpoint. Never enter a real secret.
 3. Preview/install this folder as a separate app using compatible API 2.18
-   Gancao firmware. Do not overwrite the original inkWrite Studio project.
+   Licorice firmware. Do not overwrite the original inkWrite Studio project.
    Native preview source upload requires the pending owner approval.
 4. Run each case with OK or tap, on Classic and Pro separately. Record host/
    firmware/API, status, byte count, pass/echo flags and whether it was preview

@@ -1,3 +1,11 @@
+## Setup instructions and firmware naming 1.0.29 - 2026-11-21
+
+Setup instructions is the first GitHub Help item and opens the same QR page
+during first-time setup. The QR points directly to the setup guide in the
+public inkWrite repository. Regenerate it with
+`python scripts/build_approval_qr.py --guide-url https://github.com/odklizec/inkWrite/blob/main/docs/GITHUB-SETUP-GUIDE.md`.
+The standalone site remains available for the QR code in 1.0.28.
+
 ## Illustrated setup guide QR 1.0.28 - 2026-11-20
 
 The public guide is hosted separately from the private inkWrite repository. The
@@ -572,7 +580,7 @@ workspace was not re-run here, and the physical Bluetooth timing is unmeasured.
 
 - App ID: `inkwrite` (new app; preserve this ID for upgrades).
 - Version: `0.1.0`, development milestone A.
-- Manifest API: `2.17`; Gancao firmware support required.
+- Manifest API: `2.17`; Licorice firmware support required.
 - No network permission. Wireless export is explicitly outside release one.
 - inkStream is inspiration only; no inkStream app identity, saved files, artwork, or source has been overwritten.
 

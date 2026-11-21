@@ -16,7 +16,7 @@ in `domain/sync_config.lua`; it contains no secret. No token/device-code persist
 ## Test on the device
 
 1. Open **inkWrite GitHub sign-in check** in My cloud workspace and install it on
-   a device running **Gancao firmware** (required for API 2.x). Use this diagnostic,
+   a device running **Licorice firmware** (required for API 2.x). Use this diagnostic,
    not the normal inkWrite editor. Its App ID is separate.
 2. Connect the device to Wi-Fi and make sure its time is valid for HTTPS.
 3. Open it, then tap **Connect** (Pro) or press **OK** (Classic).

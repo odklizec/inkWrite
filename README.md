@@ -34,13 +34,13 @@ Build 1.0.19 fixes touch feedback: single taps immediately show the new caret an
 
 See [Phase 3 implementation and test instructions](docs/GITHUB-SYNC-PHASE3.md), [API review](docs/XTAPP-API-REVIEW-2026-11-13.md), [App setup](docs/GITHUB-APP-SETUP.md) and [Studio project layout](docs/STUDIO-PROJECT-LAYOUT.md). The owner reported the standalone Phase 2 sign-in test working; document transfers still need device acceptance.
 
-A quiet writing and journaling app for Xteink X4Pro and X4Classic. Requires compatible Gancao firmware with XTApp API 2.26 support.
+A quiet writing and journaling app for Xteink X4Pro and X4Classic. Requires compatible Licorice firmware with XTApp API 2.26 support.
 
 ## GitHub setup
 
 Start with the [illustrated beginner’s guide to connecting inkWrite to GitHub](docs/GITHUB-SETUP-GUIDE.md). The [self-contained HTML guide](docs/github_guide/GITHUB-SETUP-GUIDE.html) also preserves its screenshots inside a Studio backup.
 
-On the reader, open **GitHub sync > Help > Illustrated setup guide** or choose **Illustrated setup guide** during first-time setup. Scan the code with your phone to open the [public guide](https://inkwrite-guide.twinwalnut.chatgpt.site). **Setup instructions** remain available offline.
+On the reader, open **GitHub sync > Help > Setup instructions** or choose **Setup instructions** during first-time setup. The reader displays the QR code offline. Scan it with your phone to open the guide on GitHub.
 
 Open **Settings > More > GitHub sync > Settings > Set up or change repository**. New installs open setup automatically. Enter your own GitHub App's public Client ID, numeric App ID and GitHub login, approve the device code (or scan its QR), then choose a private repository and branch. Save the verified destination. No secrets or source edits are needed. Existing owner setup is retained.
 

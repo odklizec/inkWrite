@@ -23,5 +23,5 @@ single-pane builds cannot load those slots; save both documents before any
 downgrade. Public Markdown/text files remain ordinary SD files.
 
 Canonical Studio app: inkWrite (inkwrite), project
-bc6ebcee-26df-4d19-b814-b9e488605d51. API 2.26 / compatible Gancao firmware.
+bc6ebcee-26df-4d19-b814-b9e488605d51. API 2.26 / compatible Licorice firmware.
 Original icons, cover and cloud-only setup guide references are preserved.

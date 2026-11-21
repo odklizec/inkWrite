@@ -1,7 +1,7 @@
 -- Setup owns a separate RAM-only sign-in until the user confirms the destination.
 local Auth=require('domain.sync_auth')
 local Primitives=require('domain.sync_primitives')
-local M={instructions='Enable device flow in your GitHub App. Set Contents to read/write and Metadata to read. Install the App on selected private repositories. Initialize the repository with a README.'}
+local M={}
 function M.new(manager,changed,dependencies)
   local d=dependencies or {};local w={active=false,page='setup',notice='',fields={}}
   local auth,verified_config,selected_profile,waiting
@@ -72,7 +72,7 @@ function M.new(manager,changed,dependencies)
       ctx.input:text({title=r.title,text=self.fields[field],max_bytes=field=='login'and 39 or field=='app_id'and 10 or 64},function(c,text)
         if text and w.active then w.fields[field]=text;w.notice='';c:invalidate()end
       end)
-    elseif r.action=='setup_help'or r.action=='setup_guide'or r.action=='setup_profiles'then enter(r.action,focus)
+    elseif r.action=='setup_guide'or r.action=='setup_profiles'then enter(r.action,focus)
     elseif r.action=='setup_signin'then
       stop();local p=d.primitives or Primitives.new(ctx)
       local public={client_id=self.fields.client_id,app_id=tonumber(self.fields.app_id),login=self.fields.login}
@@ -129,15 +129,14 @@ function M.new(manager,changed,dependencies)
         {label='App ID: '..self.fields.app_id,action='setup_edit',field='app_id',title='GitHub App numeric ID'},
         {label='GitHub login: '..self.fields.login,action='setup_edit',field='login',title='Your GitHub login'},
         {label='Sign in and choose repository',action='setup_signin'},
-        {label='Setup instructions',action='setup_help'}}
+        {label='Setup instructions',action='setup_guide'}}
       if manager.config then header[2]='Active: '..manager.config.scope.repo..' / '..manager.config.scope.branch end
       for _,v in ipairs(manager.profiles)do
         if not manager.config or v.profile~=manager.config.profile then
           rows[#rows+1]={label='Switch to a saved repository...',action='setup_profiles'};break
         end
       end
-      if manager.error then rows={{label='Setup instructions',action='setup_help'}}end
-      rows[#rows+1]={label='Illustrated setup guide',action='setup_guide'}
+      if manager.error then rows={{label='Setup instructions',action='setup_guide'}}end
     elseif self.page=='setup_profiles'then
       header={'Saved repositories','Choose a repository and branch',''}
       for i,v in ipairs(manager.profiles)do
@@ -145,8 +144,6 @@ function M.new(manager,changed,dependencies)
           rows[#rows+1]={label=v.scope.repo..' / '..v.scope.branch,action='setup_saved',number=i}
         end
       end
-    elseif self.page=='setup_help'then
-      header={'Before signing in','Your own GitHub App and private repository',M.instructions}
     elseif self.page=='setup_repos'or self.page=='setup_branches'then
       local repos=self.page=='setup_repos';header[2]=(repos and 'Choose private repository'or 'Choose branch')..' / page '..self.list.page
       for _,v in ipairs(self.list.rows)do rows[#rows+1]={label=(repos and v.full_name..'...' or v.name),action=repos and 'setup_repo'or 'setup_branch',file=v}end

@@ -72,7 +72,7 @@ for _,dims in ipairs({{480,800},{800,480}})do
   check(a.sync.page=='help','help opens from the main GitHub menu')
   key('ArrowDown');key('Enter');check(a.sync.page=='revoke','revocation instructions live under Help')
   key('Escape');check(a.sync.page=='help'and a.sync.focus==2,'Back returns to the help topic list')
-  key('ArrowUp');key('Enter');check(a.sync.page=='setup_help','setup instructions live under Help')
+  key('ArrowUp');key('Enter');check(a.sync.page=='setup_guide','the first Help row shows the setup instructions QR')
   key('Escape');key('Escape');key('Escape');a.view='editor';c.state.github_sync_remember=false;c.state.github_sync_enabled=false
   App.input(c,{type='key',source='keyboard',code='KeyG',phase='down',mods={ctrl=true}})
   check(a.sync.active and a.sync.page=='connect'and a.editor.buffer:text()==files['ideas.md']and calls==0,'Ctrl+G opens first-use Sync setup without typing into the document')
