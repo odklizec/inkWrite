@@ -33,6 +33,11 @@ function M.name_ok(n)
   local lower=n:lower()
   return lower:sub(-3)==".md" or lower:sub(-4)==".txt"
 end
+function M.missing(ctx,name)
+  if not ctx.files then return false end
+  local size,err=call(ctx.files,"size",name)
+  return size==nil and err=="not_found"
+end
 function M.read(ctx,name)
   if not M.name_ok(name) then return nil,"Unsupported filename" end
   local n,e=call(ctx.files,"size",name); if n==nil then return nil,e end

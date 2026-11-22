@@ -11,6 +11,7 @@ local reasons={conflict=true,saved_file_changed=true,metadata_invalid=true,check
  connection_required=true,authorization_required=true,interrupted=true,no_network=true,timeout=true,
  io_error=true,busy=true,server_error=true,rate_limited=true,remote_race=true,other=true}
 local retry={interrupted=true,no_network=true,timeout=true,io_error=true,busy=true,server_error=true,remote_race=true,checkpoint_failed=true}
+local connection_hold={no_network=true,timeout=true,io_error=true,connection_required=true,authorization_required=true}
 function M.new(session,hooks,dependencies)
  local d=dependencies or {};local config=d.config or Config;local file=config.profile and ('gh'..config.profile..'-'..M.FILE)or M.FILE;local source=config.scope;local scope={repo=source.repo,branch=source.branch}
  local q={items={},notice='Off',loaded=false,dirty=false,paused=false};local p,raw,active,last_input
@@ -113,10 +114,41 @@ function M.new(session,hooks,dependencies)
   raw=v or false
   self.loaded=true;self.dirty=true;self:flush(c);self.notice=self.bad and self.notice or 'Upload queue cleared'
  end
+ local function queue_removed()
+  q.dirty=true
+  if not q.bad then q.notice=#q.items>0 and 'Pending saved documents'or 'No pending uploads'end
+ end
  function q:ack(c,name,fingerprint)
-  if not self.loaded and c.state.github_sync_auto==false then self:load(c,true)end
+  if not self.loaded then self:load(c,true)end
   for i=#self.items,1,-1 do local v=self.items[i]
-   if v.name==name and (fingerprint==nil or v.fingerprint==fingerprint)then table.remove(self.items,i);self.dirty=true end
+   if v.name==name and (fingerprint==nil or v.fingerprint==fingerprint)then
+    table.remove(self.items,i);queue_removed()
+    return
+   end
+  end
+ end
+ function q:prune_missing(c)
+  if self.bad or #self.items==0 then return end
+  if c.budget then c.budget:extend()end
+  local count=#self.items
+  for i=count,1,-1 do
+   local item=self.items[i]
+   if item.held and Docs.missing(c,item.name)then table.remove(self.items,i)end
+  end
+  if #self.items~=count then queue_removed()end
+ end
+ function q:connection_verified(c)
+  if self.bad then return end
+  local resumed=false
+  for _,item in ipairs(self.items)do
+   if item.held and connection_hold[item.reason]then
+    item.held=false;item.attempts=0;item.reason=nil;item.last=now(c)
+    resumed=true
+   end
+  end
+  if resumed then
+   self.dirty=true;self.notice='Pending saved documents'
+   if c.invalidate then c:invalidate()end
   end
  end
  function q:retry(c)

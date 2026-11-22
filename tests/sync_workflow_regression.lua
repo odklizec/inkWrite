@@ -147,9 +147,91 @@ check(h.s.review.name=='other.md'and h.s.review.file.bytes=='Other local','pendi
 h.s:resolve_review(h.ctx,'local');h:verify(h.s);h:respond(F.file('other.md','Other GitHub',F.NEW))
 check(h.files['other.md']=='Other GitHub'and h.a.editor.buffer:text()==current and h.a.editor.doc.name=='ideas.md','resolving another file preserves active editor identity and bytes')
 -- Badge is visible and clickable, including focus mode; close dialogs retain input ownership.
-h=setup();h.a.sync.auto.items={{name='ideas.md',held=true,reason='conflict'}}
 local badge
 local g=setmetatable({text=function(_,x,y,t,o)if t=='GitHub !'then badge={x=x,y=y}end end},{__index=function()return function()end end})
+local function has_badge(x)
+ badge=nil;App.draw(x.ctx,g);return badge~=nil
+end
+
+-- A held upload can predate a manual save when automatic uploads are off.
+local stale=setup();local stale_queue=stale.a.sync.auto
+stale.ctx.state.github_sync_auto=true;stale_queue:saved(stale.ctx,'ideas.md',OLD)
+stale_queue.items[1].held=true;stale_queue.items[1].reason='conflict'
+stale.ctx.state.github_sync_auto=false
+stale.a.editor.buffer:replace(0,#OLD,LOCAL);stale.a.editor.dirty=true
+check(has_badge(stale),'held upload is visible before manual Sync')
+stale.s:sync(stale.ctx);stale:read(OLD,F.OLD);stale:verify(stale.s);stale:respond(F.written('documents/ideas.md'),200)
+check(stale.s.notice=='Synced: ideas.md'and stale.s.file_status=='Up to date at last sync','manual Sync verifies and records the current SD version')
+check(#stale_queue.items==0 and not has_badge(stale),'manual Sync clears a superseded upload hold for the same filename')
+check(stale_queue:flush(stale.ctx),'the cleared hold is saved')
+local reloaded=require('domain.sync_auto').new(stale.s,{})
+reloaded:load(stale.ctx,true)
+check(#reloaded.items==0 and not reloaded.bad,'a fresh queue cannot restore the superseded hold')
+
+local orphan=setup();local orphan_queue=orphan.a.sync.auto
+orphan.ctx.state.github_sync_auto=true
+orphan_queue:saved(orphan.ctx,'removed.md','previous file')
+orphan_queue.items[1].held=true;orphan_queue.items[1].reason='conflict'
+orphan.s.needs_review='removed.md'
+check(has_badge(orphan),'a legacy hold can refer to a file removed from the SD card')
+local requests=orphan.calls
+App.input(orphan.ctx,{type='pointer',phase='up',gesture='tap',x=badge.x,y=badge.y})
+check(orphan.calls==requests and #orphan_queue.items==0 and not orphan.s.needs_review
+ and orphan.s.notice=='Local file no longer on the SD card: removed.md','badge retires a missing file and reports its name without a GitHub request')
+App.input(orphan.ctx,{type='key',key='back',phase='up'})
+check(not has_badge(orphan),'returning to writing clears the badge for the removed file')
+
+local other=setup();local other_queue=other.a.sync.auto
+other.ctx.state.github_sync_auto=true
+other.files['conflict.md']='Local version';other_queue:saved(other.ctx,'conflict.md',other.files['conflict.md'])
+other_queue:saved(other.ctx,'unreadable.md','Unconfirmed SD contents')
+other_queue:saved(other.ctx,'removed.md','Previous file')
+for _,item in ipairs(other_queue.items)do item.held=true;item.reason='conflict'end
+local original_size=other.ctx.files.size
+other.ctx.files.size=function(self,name)
+ if name=='unreadable.md'then return nil,'io_error'end
+ return original_size(self,name)
+end
+other.a.sync:sync_document(other.ctx);other:read(OLD,F.OLD)
+check(#other_queue.items==2 and other_queue.items[1].name=='conflict.md'and other_queue.items[2].name=='unreadable.md',
+ 'Sync removes confirmed missing files and preserves other conflicts and SD read failures')
+App.input(other.ctx,{type='key',key='back',phase='up'})
+check(has_badge(other),'a separate existing conflict keeps the attention badge')
+
+local function held_offline()
+ local x=setup();local c=x.ctx;local q=x.a.sync.auto
+ c.state.github_sync_auto=true;c.state.github_sync_remember=true
+ x.s:remember(c);q:saved(c,'ideas.md',OLD)
+ for _,wait in ipairs({30000,30000,120000})do
+  x.time=x.time+wait;App.tick(c);x:verify(x.s);x:respond('',200,{ok=false,err='no_network'})
+ end
+ assert(q.items[1].held and q.items[1].reason=='no_network')
+ return x,q
+end
+local offline,q=held_offline()
+offline.s:refresh_file_status(offline.ctx)
+check(has_badge(offline)and offline.s.file_status=='Up to date at last sync','cached checkpoint and held offline upload can coexist')
+offline.s:disconnect(offline.ctx);offline.s:connect(offline.ctx)
+offline:respond('',200,{ok=false,err='no_network'})
+check(has_badge(offline)and q.items[1].attempts==3,'failed reconnect leaves offline attention and retry count intact')
+offline.s:connect(offline.ctx);offline:verify(offline.s)
+check(not has_badge(offline)and #q.items==1 and q.items[1].attempts==0,'verified reconnect clears offline attention and requeues the same saved file')
+check(q.items[1].fingerprint==Mock.hash(OLD)and q.dirty,'recovery retains the queued fingerprint and marks the change for persistence')
+offline.time=offline.time+30000;App.tick(offline.ctx);offline:read(OLD,F.OLD)
+check(not has_badge(offline)and #q.items==0 and offline.options.method=='GET','recovery verifies matching bytes and clears the queue without a redundant write')
+offline,q=held_offline()
+offline.files['other.md']='Other saved document';q:saved(offline.ctx,'other.md',offline.files['other.md'])
+offline.time=offline.time+30000;App.tick(offline.ctx);offline:verify(offline.s)
+offline:respond(F.file('other.md',offline.files['other.md'],F.NEW))
+check(#q.items==1 and q.items[1].held and q.items[1].attempts==3,'background success on a different file leaves exhausted retry budgets intact')
+offline,q=held_offline()
+offline.files['other.md']='different';offline.files['limited.md']='limited'
+q.items[2]={name='other.md',fingerprint=Mock.hash('different'),held=true,reason='conflict',attempts=1,last=offline.time}
+q.items[3]={name='limited.md',fingerprint=Mock.hash('limited'),held=true,reason='rate_limited',attempts=3,last=offline.time}
+App.input(offline.ctx,{type='key',source='keyboard',phase='down',code='KeyG',mods={ctrl=true}})
+offline:read(OLD,F.OLD);offline.a.sync:tick(offline.ctx)
+check(not q.items[1].held and q.items[2].held and q.items[3].held,'a successful review using the existing login requeues offline work and keeps conflict and rate-limit holds')
+h=setup();h.a.sync.auto.items={{name='ideas.md',held=true,reason='conflict'}}
 App.draw(h.ctx,g);check(badge~=nil,'writing screen displays a conflict badge without replacing local Saved status')
 App.input(h.ctx,{type='pointer',phase='up',gesture='tap',x=badge.x,y=badge.y});h:read(NEW,F.NEW);h.a.sync:tick(h.ctx)
 check(h.a.sync.active and h.a.sync.page=='compare','badge tap opens actual two-version review')

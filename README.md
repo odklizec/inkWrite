@@ -90,7 +90,7 @@ Ctrl+S or Save writes to SD. Autosave runs after about five idle seconds without
 
 If a loaded file changed externally, saving creates a conflict copy instead of silently replacing it. Differing recovery text reopens as a recovered copy. Check and save recovered text. Protected/recovery errors block unsafe changes.
 
-Back from the normal editor or its header X opens the close dialog. Unsaved changes offer Save or Discard, with Cancel available. Explicit Discard removes matching recovery; a failed save keeps the app open.
+Press Ctrl+Q from the editor to open the close dialog, including in focus mode. Back from the normal editor or its header X also opens it. Unsaved changes offer Save or Discard, with Cancel available. Explicit Discard removes matching recovery. If saving fails, the app stays open.
 
 ## Retrieve your writing
 
@@ -103,6 +103,7 @@ Optional manual GitHub transfers are available through Settings → More → Git
 | Shortcut | Action |
 | --- | --- |
 | Ctrl+S | Save |
+| Ctrl+Q | Close inkWrite |
 | Ctrl+G | Sync this document / review GitHub attention |
 | Ctrl+N | New dated Markdown document |
 | Ctrl+O | Open file |

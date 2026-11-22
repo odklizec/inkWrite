@@ -1,3 +1,15 @@
+## GitHub sync attention and Ctrl+Q 1.0.33 - 2026-11-22
+
+A successful manual sync retires older queued saves for that file. Opening GitHub sync
+retires holds for files confirmed missing from the SD card. A verified GitHub connection
+requeues temporary connection failures. Existing conflicts, rate limits and SD read
+errors retain their safeguards. Ctrl+Q opens the standard close dialog from the editor
+and focus mode, and is listed in Keyboard help.
+
+The owner confirmed on the reader that Ctrl+Q opens the dialog and that the GitHub
+badge clears after a successful sync in the test build. Regression coverage includes
+stale queue entries, missing SD files, reconnects, and the keyboard close dialog.
+
 ## Native font settings 1.0.32 - 2026-11-21
 
 Settings > Type opens the device’s Fonts page where supported. Older

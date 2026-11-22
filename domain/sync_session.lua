@@ -14,6 +14,10 @@ function M.new(hooks,dependencies)
   local s={notice='Manual sync. Local saves stay on the SD card.',rows={},busy=false,file_status='Saved locally'}
   local function notify(ctx,text)s.notice=text;ctx:invalidate()end
   local function wifi(ctx,ms)if ctx.net and ctx.net.keep_wifi then pcall(ctx.net.keep_wifi,ctx.net,ms)end end
+  local function connection_verified(ctx)
+    -- Automatic attempts already have their own retry budget.
+    if not s.auto_active and s.on_connected then s.on_connected(ctx)end
+  end
   local function ready(ctx)
     p=p or d.primitives or Primitives.new(ctx)
     if not auth then
@@ -21,6 +25,7 @@ function M.new(hooks,dependencies)
       if p then auth=(d.auth_factory or Auth.new)(config,p)end
     end
     if not auth then notify(ctx,'GitHub setup or runtime unavailable.');return false end
+    auth.on_connected=connection_verified
     return true
   end
   function s:status(ctx)
@@ -52,6 +57,7 @@ function M.new(hooks,dependencies)
     else self.file_status='Changes waiting to upload'end
   end
   function s:open(ctx)
+    if self.needs_review and Docs.missing(ctx,self.needs_review)then self.needs_review=nil end
     self:refresh_file_status(ctx)
     if reconnect_allowed and ctx.state.github_sync_enabled==true and ctx.state.github_sync_remember==true and ready(ctx)then
       local status=auth:status(ctx)
@@ -112,11 +118,18 @@ function M.new(hooks,dependencies)
     return current and current.identity==snapshot.identity and current.name==snapshot.name
       and current.revision==snapshot.revision and current.bytes==snapshot.bytes and current.saved==true and current.exists==true,current
   end
-  local function checkpoint(ctx,metadata,revision,name,record)
+  local function checkpoint(ctx,metadata,revision,name,record,verified_current)
     local next_value=Store.checkpoint(metadata,name,record,config.scope)
     local ok=next_value and Store.save(ctx,next_value,config.scope,p.hash,revision)
     if ok and s.needs_review==name then s.needs_review=nil end
-    if ok and s.on_checkpoint then s.on_checkpoint(ctx,name,record.last_synced_local_fingerprint)end
+    if ok and s.on_checkpoint then
+      if verified_current then
+        -- Manual sync verified the current SD contents. Older queued saves for this file are obsolete.
+        s.on_checkpoint(ctx,name)
+      else
+        s.on_checkpoint(ctx,name,record.last_synced_local_fingerprint)
+      end
+    end
     return ok
   end
   function s:sync(ctx)return self:upload(ctx,false,true)end
@@ -145,7 +158,7 @@ function M.new(hooks,dependencies)
       if as_new then notify(c,'Uploaded new remote copy: '..name);return end
       local result=core:finish(op,receipt,current)
       if not result then failed(c,id,'receipt');return end
-      local saved=checkpoint(c,metadata,revision,result.name,result.record)
+      local saved=checkpoint(c,metadata,revision,result.name,result.record,true)
       if saved then s.file_status='Up to date at last sync';s.remote_change=nil end
       local success=combined and (outcome=='mark_synced'and 'Up to date: 'or 'Synced: ')or 'Uploaded and verified: '
       notify(c,saved and success..name or 'Upload complete; sync record not saved. Recheck next sync.')
@@ -232,7 +245,20 @@ function M.new(hooks,dependencies)
   function s:review_document(ctx,name)
     if ctx.budget then ctx.budget:extend()end
     local file=hooks.snapshot(ctx,true,name)
-    if not file then notify(ctx,'Save the local document successfully before review.');return end
+    if not file then
+      if name and Sync.name_ok(name)then
+        if Docs.missing(ctx,name)then
+          if self.needs_review==name then self.needs_review=nil end
+          if self.on_checkpoint then self.on_checkpoint(ctx,name)end
+          notify(ctx,'Local file no longer on the SD card: '..name)
+        else
+          notify(ctx,'Could not open a saved local copy of '..name)
+        end
+      else
+        notify(ctx,'Save the local document successfully before review.')
+      end
+      return
+    end
     local id=begin(ctx);if not id then return end
     self.review=nil;self.conflict=nil;self.pending_update=nil
     local ok,e=auth:read(ctx,file.name,function(c,remote,why)
@@ -258,10 +284,10 @@ function M.new(hooks,dependencies)
       if not current or current.bytes~=bytes then failed(c,id,'local_changed');return end
       local fp=Sync.digest(p.hash,bytes)
       local saved=fp and checkpoint(c,metadata,revision,review.name,{remote_path='documents/'..review.name,
-        remote_blob_sha=sha,last_synced_local_fingerprint=fp})
+        remote_blob_sha=sha,last_synced_local_fingerprint=fp},true)
       s.busy=false;s.review=nil;s.conflict=nil;s.pending_update=nil;s.remote_change=nil
       s.file_status=saved and 'Up to date at last sync'or 'Saved locally'
-      if local_update and s.on_checkpoint then s.on_checkpoint(c,review.name,nil)end
+      if local_update and not saved and s.on_checkpoint then s.on_checkpoint(c,review.name,nil)end
       if (local_update or saved)and s.needs_review==review.name then s.needs_review=nil end
       notify(c,(identical and 'Both versions already match.'or (local_update and 'Local version replaced.'or 'GitHub version replaced.'))
         ..(backup and ' Backup: '..backup or '')..(saved and ''or ' Sync record not saved; recheck.'))

@@ -14,6 +14,7 @@ function M.new(hooks,small,title,dependencies)
   local s=Session.new(hooks,dependencies)
   local auto=Automatic.new(s,hooks,dependencies)
   s.on_checkpoint=function(ctx,name,fingerprint)auto:ack(ctx,name,fingerprint)end
+  s.on_connected=function(ctx)auto:connection_verified(ctx)end
   local u={active=false,page='main',focus=1,parents={},session=s,auto=auto}
   local rows,header,geometry,key,status={},{},{},nil,{}
   local function enter(page)
@@ -223,6 +224,7 @@ function M.new(hooks,small,title,dependencies)
       local next_dependencies={config=config,primitives=p,auth=candidate}
       s=Session.new(hooks,next_dependencies);auto=Automatic.new(s,hooks,next_dependencies)
       s.on_checkpoint=function(c,name,fingerprint)auto:ack(c,name,fingerprint)end
+      s.on_connected=function(c)auto:connection_verified(c)end
       u.session=s;u.auto=auto;u.page='main';u.focus=1;u.parents={};u.comparison=nil
       s.notice=candidate and 'Setup saved. Connected; automatic uploads Off.'or 'Setup selected. Connect to verify access; automatic uploads Off.'
       return final
@@ -230,7 +232,7 @@ function M.new(hooks,small,title,dependencies)
     u.setup=wizard
   end
   function u:open(ctx)
-    auto:interrupt(ctx);auto:load(ctx);self.active=true;self.page='main';self.focus=1
+    auto:interrupt(ctx);auto:load(ctx);auto:prune_missing(ctx);self.active=true;self.page='main';self.focus=1
     self.parents={};self.comparison=nil;self.wizard_focus=nil;key=nil
     if setup_locked()then wizard:open()else s:open(ctx)end;prepare(ctx)
   end

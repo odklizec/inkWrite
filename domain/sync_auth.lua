@@ -48,6 +48,10 @@ function M.new(config,primitives,discovery)
   local token,token_start,token_ms,device_code,user_code,code_start,code_ms,last_poll,interval
   local verified,account_id,repository_id=false,nil,nil
   local s={}
+  local function connected(ctx)
+    state='connected';reason=nil
+    if s.on_connected then s.on_connected(ctx)end
+  end
   local function stop(next_state,why)
     generation=generation+1;oauth:cancel();api:cancel();busy=false
     token=nil;token_start=nil;token_ms=nil;device_code=nil;user_code=nil
@@ -350,7 +354,7 @@ function M.new(config,primitives,discovery)
       end
       if discovery then setup_pending=pending;saved_record=nil
       elseif not refreshing then persist(c2)end
-      state=discovery and 'setup_ready'or 'connected';reason=nil
+      if discovery then state='setup_ready';reason=nil else connected(c2)end
       if c2.invalidate then c2:invalidate()end
     end)
   end
@@ -396,7 +400,7 @@ function M.new(config,primitives,discovery)
           else failure(why,c)end
           return
         end
-        state='connected';reason=nil;if c.invalidate then c:invalidate()end
+        connected(c);if c.invalidate then c:invalidate()end
       end)
     else
       refresh_saved(ctx,record)
@@ -504,7 +508,7 @@ function M.new(config,primitives,discovery)
           result,why=Payload.read(res.status,res.data,path,primitives.codec)
           if result and expected_sha and (not result.exists or result.sha~=expected_sha)then result=nil;why='remote_changed'end
         end
-        state=result and 'connected'or 'error';reason=why
+        if result then connected(c2)else state='error';reason=why end
         done(c2,result,why)
       end)
     end)
@@ -536,7 +540,9 @@ function M.new(config,primitives,discovery)
         local rows,err
         if res.err or res.status~=200 then err=response_error(res)
         else rows,err=Payload.history(res.data)end
-        if err=='authorization_required'then failure(err,c2)else state=rows and 'connected'or 'error';reason=err end
+        if rows then connected(c2)
+        elseif err=='authorization_required'then failure(err,c2)
+        else state='error';reason=err end
         done(c2,rows and {rows=rows,page=page,anchor=ref,
           more=#rows==Payload.HISTORY_PAGE_SIZE and page<Payload.HISTORY_MAX_PAGES,
           limited=#rows==Payload.HISTORY_PAGE_SIZE and page==Payload.HISTORY_MAX_PAGES}or nil,err)
@@ -556,7 +562,9 @@ function M.new(config,primitives,discovery)
     local function finish(c,rows,why)
       busy=false
       if not valid_token(c)then done(c,nil,'session_expired');return end
-      if why=='authorization_required'then failure(why,c)else state=rows and 'connected'or 'error';reason=why end
+      if rows then connected(c)
+      elseif why=='authorization_required'then failure(why,c)
+      else state='error';reason=why end
       done(c,rows,why)
     end
     validate_access(ctx,function(c,ok,why)

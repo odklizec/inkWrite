@@ -7,7 +7,7 @@ local Layout=require("domain.layout")
 local Keyboard=require("keyboard")
 local Stats=require("domain.stats")
 local SyncUI=require('domain.sync_ui')
-local M={VERSION="1.0.32"}
+local M={VERSION="1.0.33"}
 local PREVIEW="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
 local A
 -- Typing pacing. None of these shorten the panel's own frame time; they keep
@@ -1049,6 +1049,10 @@ local function keyboard(ctx,ev)
   end
   -- Keyboard-only access; Fn itself is not exposed by the host.
   local shortcut = (mods.ctrl or mods.meta) and not mods.alt
+  if A.view=="editor" and code=="KeyQ" and shortcut and not mods.shift then
+    if down then A.editor.typing_time=nil;close_request(ctx) end
+    return true
+  end
   local help_key = (code=="F1" and not mods.ctrl and not mods.meta and not mods.alt and not mods.shift)
     or (code=="KeyH" and shortcut and not mods.shift)
   if help_key and (A.view=="editor" or A.view=="help") then
@@ -1705,7 +1709,7 @@ end
 local function help_text(ctx)
   if A.view=="font_help" then return "Your Ink App font\n\nChoose the font in Ink App > Settings > Font. Then close and reopen inkWrite to start a new font session.\n\ninkWrite follows that choice for writing and controls. This page shows the font actually returned by the device.\n\nPut .ttf files in the SD card fonts folder. If the chosen font is unavailable or cannot open, the device may use the reader font or a built-in fallback.\n\nSize, line spacing and margins remain in inkWrite Typography. They change appearance only; saved document bytes are unchanged."
   elseif A.view=="files_help" then return "Your writing lives on the SD card:\n\n"..(ctx.files and ctx.files.path or "/AppFiles/inkwrite").."\n\nSave first. Power down the device, remove the SD card, then copy the .md or .txt files using a card reader.\n\nOpen them in any text editor. No account or conversion needed.\n\nPrivate recovery is removed on uninstall; saved public files remain."
-  elseif A.view=="help" then return "Ctrl+H or F1   Keyboard help\nCtrl+Shift+T   Focus toolbar\nEscape   Back one level\nCtrl+S   Save\nCtrl+N   New document\nCtrl+O   Open file\nCtrl+J   Today journal\nCtrl+Z   Undo\nCtrl+Shift+Z   Redo\nCtrl+A   Select all\nCtrl+C / X / V   Copy / cut / paste\nCtrl+B / I   Bold / italic (.md)\nCtrl+1 to Ctrl+6   Heading 1-6 (.md)\nCtrl+0   Remove heading (.md)\nCtrl+L   Bullet list (.md)\nCtrl+Quote   Quote line (.md)\nCtrl+K   Link (.md)\nCtrl+Shift+F   Toggle focus\nCtrl+Shift+P   Split screen\nCtrl+Tab   Switch pane\nCtrl+Shift+S   Cycle split ratios\nCtrl+Shift+R   Rotate screen\nAlt+Shift / Ctrl+Space   Next keyboard\nCtrl+R   Full screen refresh\n\nMarkdown shortcuts insert the markers in the text and work on every line the selection touches. The editor shows plain source; nothing is rendered.\n\nLeft / Right   Move character\nCtrl+Left / Right   Move word\nHome / End   Start / end of line\nCtrl+Home / End   Start / end of file\nPageUp / PageDown   Move page\nShift+movement   Select text\nEscape / Back   Return / menu\n\nTouch controls\nDouble-tap word   Select word\nTriple-tap word   Select sentence\nDouble-tap empty space   Focus\nSwipe up / down   Browse text\nLeft edge >   Shortcuts\nRight edge <   Statistics\nBottom edge up   Virtual keyboard\nKeyboard icon   Choose language\nWord count   Statistics\n\nType a letter before its accent.\nClipboard stays inside inkWrite."
+  elseif A.view=="help" then return "Ctrl+H or F1   Keyboard help\nCtrl+Shift+T   Focus toolbar\nEscape   Back one level\nCtrl+S   Save\nCtrl+Q   Close inkWrite\nCtrl+N   New document\nCtrl+O   Open file\nCtrl+J   Today journal\nCtrl+Z   Undo\nCtrl+Shift+Z   Redo\nCtrl+A   Select all\nCtrl+C / X / V   Copy / cut / paste\nCtrl+B / I   Bold / italic (.md)\nCtrl+1 to Ctrl+6   Heading 1-6 (.md)\nCtrl+0   Remove heading (.md)\nCtrl+L   Bullet list (.md)\nCtrl+Quote   Quote line (.md)\nCtrl+K   Link (.md)\nCtrl+Shift+F   Toggle focus\nCtrl+Shift+P   Split screen\nCtrl+Tab   Switch pane\nCtrl+Shift+S   Cycle split ratios\nCtrl+Shift+R   Rotate screen\nAlt+Shift / Ctrl+Space   Next keyboard\nCtrl+R   Full screen refresh\n\nMarkdown shortcuts insert the markers in the text and work on every line the selection touches. The editor shows plain source; nothing is rendered.\n\nLeft / Right   Move character\nCtrl+Left / Right   Move word\nHome / End   Start / end of line\nCtrl+Home / End   Start / end of file\nPageUp / PageDown   Move page\nShift+movement   Select text\nEscape / Back   Return / menu\n\nTouch controls\nDouble-tap word   Select word\nTriple-tap word   Select sentence\nDouble-tap empty space   Focus\nSwipe up / down   Browse text\nLeft edge >   Shortcuts\nRight edge <   Statistics\nBottom edge up   Virtual keyboard\nKeyboard icon   Choose language\nWord count   Statistics\n\nType a letter before its accent.\nClipboard stays inside inkWrite."
   end
 end
 -- Layout is prepared in lifecycle/input/timer callbacks, never in draw.

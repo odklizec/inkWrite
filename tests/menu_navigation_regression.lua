@@ -48,4 +48,24 @@ for _,line in ipairs(h.lines)do if line.y==last.y-10 and line.t==line.y then sep
 check(separated and row('Enter focus mode').y<last.y,'a horizontal separator precedes the final split action')
 tap('Back to writing')
 check(a.view=='editor'and not a.workspace.split,'the explicit writing action leaves split settings')
+
+local quit={ctrl=true}
+h:key('KeyQ',nil,quit)
+check(row('Close inkWrite?') and not a.close_modal.dirty and not h.quit,'Ctrl+Q shows confirmation for a clean document')
+h:key('ArrowRight')
+for _,phase in ipairs({'repeat','up'})do
+  App.input(h.ctx,{type='key',source='keyboard',phase=phase,code='KeyQ',mods=quit})
+end
+check(a.close_modal.choice==2 and not h.quit,'holding or releasing Ctrl+Q leaves the selection in place')
+h:key('Enter');check(h.quit,'confirming Close quits')
+
+h=Host.new();a=h:state()
+h:key('KeyF',nil,{ctrl=true,shift=true});h:edit(' unsaved')
+local draft=a.editor.buffer:text()
+h:key('KeyQ',nil,quit)
+check(a.focus_mode and a.close_modal and a.close_modal.dirty and a.close_modal.choice==1,'Ctrl+Q opens the dirty close dialog in focus mode with Cancel selected')
+h:key('Escape')
+check(not a.close_modal and not h.quit and a.editor.dirty and a.editor.buffer:text()==draft,'Cancel preserves the draft and keeps writing open')
+h:key('KeyQ',nil,quit);h:key('ArrowRight');h:key('Enter')
+check(h.quit and h.files['alpha.md']==draft,'Save writes the draft before closing')
 return n
